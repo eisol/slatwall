@@ -5,10 +5,21 @@
 	ng-attr-title="{{swActionCaller.title}}" 
 	ng-attr-class="{{swActionCaller.class}}" 
 	target="_self" 
-	ng-href="{{$root.buildUrl(swActionCaller.action,swActionCaller.queryString)}}"
+	ng-href="{{swActionCaller.actionUrl}}"
 	data-disabled="{{swActionCaller.disabledtext}}"
 	data-confirm="{{swActionCaller.confirmtext}}"
 	href="##"
+	>
+	<i ng-show="swActionCaller.icon && swActionCaller.icon.length" class="glyphicon glyphicon-{{swActionCaller.icon}}"></i>{{swActionCaller.text}}
+</a>
+
+<a  ng-if="swActionCaller.type === 'ajaxlink'"
+	ng-attr-title="{{swActionCaller.title}}" 
+	ng-attr-class="{{swActionCaller.class}}" 
+	data-disabled="{{swActionCaller.disabledtext}}"
+	data-confirm="{{swActionCaller.confirmtext}}"
+	role="button"
+	ng-click="swActionCaller.submit()"
 	>
 	<i ng-show="swActionCaller.icon && swActionCaller.icon.length" class="glyphicon glyphicon-{{swActionCaller.icon}}"></i>{{swActionCaller.text}}
 </a>
@@ -21,7 +32,7 @@
 	<a ng-attr-title="{{swActionCaller.title}}" 
 		ng-attr-class="{{swActionCaller.class}}" 
 		target="_self" 
-		ng-href="{{$root.buildUrl(swActionCaller.action,swActionCaller.queryString)}}"
+		ng-href="{{swActionCaller.actionUrl}}"
 		>
 		<i ng-show="swActionCaller.icon && swActionCaller.icon.length" class="glyphicon glyphicon-{{swActionCaller.icon}}"></i>{{swActionCaller.text}}
 	</a>
@@ -36,5 +47,6 @@
 	ng-attr-class="{{swActionCaller.class}}" 
 	ng-attr-title="{{swActionCaller.title}}"
 	ng-click="swActionCaller.submit()"
+	ng-disabled="swActionCaller.disabled"
 	><i ng-show="swActionCaller.icon && swActionCaller.icon.length" class="glyphicon glyphicon-{{swActionCaller.icon}}"></i><span ng-bind="swActionCaller.text"></span>
 </button>

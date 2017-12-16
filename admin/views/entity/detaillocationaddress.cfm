@@ -60,14 +60,15 @@ Notes:
 								   backAction="admin:entity.detailLocation" 
 								   backQueryString="locationID=#rc.location.getLocationID()#"
 								   cancelAction="admin:entity.detailLocation"
-								   cancelQueryString="locationID=#rc.location.getLocationID()#">
+								   cancelQueryString="locationID=#rc.location.getLocationID()#"
+								   deleteQueryString="sRedirectAction=entity.detaillocation&locationID=#rc.location.getLocationID()#">
 								   	   
 		</hb:HibachiEntityActionBar>
 			
 		<input type="hidden" name="location.locationID" value="#rc.location.getLocationID()#" />
 		<input type="hidden" name="locationID" value="#rc.location.getLocationID()#" />
 		
-		<swa:SlatwallAdminAddressDisplay address="#rc.locationAddress.getAddress()#" fieldNamePrefix="address." showCompany="false" edit="#rc.edit#">
+		<swa:SlatwallAdminAddressDisplay address="#rc.locationAddress.getAddress()#" fieldNamePrefix="address." showCompany="false" showPhoneNumber="true" showEmailAddress="true" edit="#rc.edit#">
 	</hb:HibachiEntityDetailForm>
 	
 </cfoutput>

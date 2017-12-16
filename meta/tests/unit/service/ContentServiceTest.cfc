@@ -47,29 +47,145 @@ Notes:
 
 */
 component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
-
+	
 	public void function setUp() {
 		super.setup();
 		
 		variables.service = request.slatwallScope.getBean("contentService");
 	}
-	
+		
+	/**
+	* @test
+	*/
 	public void function deleteCategory_removes_content_assignments() {
 		
 		// Create a content & category
 		var content = createPersistedTestEntity( 'Content' );
+		var product = createPersistedTestEntity( 'Product' );
 		var category = createPersistedTestEntity( 'Category' );
-		
+		var parentCategory = createPersistedTestEntity( 'Category' );
 		// Add the Many-to-Many relationship
+		parentCategory.addChildCategory(category);
+		category.setParentCategory(parentCategory);
+		
 		content.addCategory( category );
 		category.addContent( content );
+		product.addCategory( category );
+		category.addProduct( product );
 		
+		
+		content.addCategory( parentCategory );
+		parentCategory.addContent( content );
+		product.addCategory( parentCategory );
+		parentCategory.addProduct( product );
 		// Persist the relationship
 		ormFlush();
 		
 		var deleteOK = variables.service.deleteCategory( category );
 		
-		assert(deleteOK);
 	}
+	
+		
+	/**
+	* @test
+	*/
+	public void function deleteCategoryByCMSCategoryID_removes_content_assignments() {
+		
+		// Create a content & category
+		var content = createPersistedTestEntity( 'Content' );
+		var product = createPersistedTestEntity( 'Product' );
+		var category = createPersistedTestEntity( 'Category' );
+		var parentCategory = createPersistedTestEntity( 'Category' );
+		
+		category.setCMSCategoryID('123');
+		
+		// Add the Many-to-Many relationship
+		category.setParentCategory(parentCategory);
+		content.addCategory( category );
+		category.addContent( content );
+		product.addCategory( category );
+		category.addProduct( product );
+		
+		content.addCategory( parentCategory );
+		parentCategory.addContent( content );
+		product.addCategory( parentCategory );
+		parentCategory.addProduct( product );
+		// Persist the relationship
+		ormFlush();
+		
+		variables.service.deleteCategoryByCMSCategoryID( '123' );
+		
+	}
+	
+//	public void function processContent_duplicateContent_Test(){
+//		
+//		var appData = {
+//			appID="",
+//			appCode="#createUUID()#"
+//		};
+//		var app = createPersistedTestEntity('app',appData);
+//		
+//		var siteData = {
+//			siteID="",
+//			siteName="testsite",
+//			siteCode="#createUUID()#",
+//			app={
+//				appID=app.getAppID()
+//			}
+//		};
+//		var site = createPersistedTestEntity('site',siteData);
+//		
+//		var parentContentData = {
+//			contentID="",
+//			site={
+//				siteID=site.getSiteID()
+//			},
+//			title="parentTestContent",
+//			urlTitle="parentTestUrlTItle#createUUID()#",
+//			contentBody="<p>myParentContent</p>"
+//		};
+//		var parentContentEntity = createPersistedTestEntity('content',parentContentData);
+//		
+//		var contentData = {
+//			contentID="",
+//			site={
+//				siteID=site.getSiteID()
+//			},
+//			title="testContent",
+//			urlTitle="testUrlTItle#createUUID()#",
+//			contentBody="<p>myContent</p>",
+//			parentContent={
+//				contentID=parentContentEntity.getContentID()
+//			}
+//		};
+//		var contentEntity = createPersistedTestEntity('content',contentData);
+//		
+//		var settingData = {
+//			setting="",
+//			settingName="contentRestrictAccessFlag",
+//			settingValue="1",
+//			content={
+//				contentID=contentEntity.getContentID()
+//			}
+//		};
+//		var settingEntity = createPersistedTestEntity('setting',settingData);
+//		
+//		var data = {
+//			title='duplicateContent#createUUID()#',
+//			urlTitle='duplicateContent#createUUID()#'
+//		};
+//		
+//		var duplicatedContent = variables.service.process(contentEntity,data,'duplicateContent');
+//		
+//		//make sure duplicated content is new and source content is not
+//		assertFalse(contentEntity.getNewFlag());
+//		
+//		//assert properties are the same
+//		assertEquals(duplicatedContent.getContentBody(),contentEntity.getContentBody());
+//		
+//		//assert the settings are the same
+//		assertEquals("#duplicatedContent.setting('contentRestrictAccessFlag')#","#contentEntity.setting('contentRestrictAccessFlag')#");
+//		
+//	}
 
 }

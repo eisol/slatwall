@@ -28,6 +28,7 @@ interface IParams{
 
 interface IHibachiInterceptorPromise<T> extends ng.IPromise<any>{
 	data:any;
+    status:number;
 }
 
 
@@ -37,10 +38,10 @@ class HibachiInterceptor implements IInterceptor{
 	public static Factory() {
         var eventHandler = (
 			$location:ng.ILocationService,
-			$window:ng.IWindowService ,
 			$q:ng.IQService,
 			$log:ng.ILogService,
 			$injector:ng.auto.IInjectorService,
+			localStorageService,
 			alertService,
 			appConfig:string,
 			dialogService,
@@ -48,10 +49,10 @@ class HibachiInterceptor implements IInterceptor{
             hibachiPathBuilder
 		)=> new HibachiInterceptor(
 			$location,
-			$window,
 			$q,
 			$log,
 			$injector,
+			localStorageService,
 			alertService,
 			appConfig,
 			dialogService,
@@ -60,10 +61,10 @@ class HibachiInterceptor implements IInterceptor{
 		);
 		eventHandler.$inject = [
 			'$location',
-			'$window',
 			'$q',
 			'$log',
 			'$injector',
+			'localStorageService',
 			'alertService',
 			'appConfig',
 			'dialogService',
@@ -80,27 +81,28 @@ class HibachiInterceptor implements IInterceptor{
 	//@ngInject
     constructor(
         public $location:ng.ILocationService,
-		public $window:ng.IWindowService,
 		public $q:ng.IQService,
 		public $log:ng.ILogService,
 		public $injector:ng.auto.IInjectorService,
+		public localStorageService,
 		public alertService,
 		public appConfig:any,
 		public dialogService,
         public utilityService,
         public hibachiPathBuilder
 	) {
+
         this.$location = $location;
-    	this.$window = $window;
 		this.$q = $q;
 		this.$log = $log;
 		this.$injector = $injector;
+		this.localStorageService = localStorageService;
 		this.alertService = alertService;
 		this.appConfig = appConfig;
-        this.baseUrl = appConfig.baseUrl;
 		this.dialogService = dialogService;
         this.utilityService = utilityService;
         this.hibachiPathBuilder = hibachiPathBuilder;
+        this.baseUrl = appConfig.baseURL;
     }
 
 	public request = (config): ng.IPromise<any> => {
@@ -109,16 +111,18 @@ class HibachiInterceptor implements IInterceptor{
         if(config.url.charAt(0) !== '/'){
             return config;
         }
-        if(config.method == 'GET' && config.url.indexOf('.html') > 0 && config.url.indexOf('admin/client/partials') > 0) {
+
+        if(config.method == 'GET' && config.url.indexOf('.html') >= 0 && config.url.indexOf('/') >= 0)  {
             //all partials are bound to instantiation key
-            config.url = config.url + '?instantiationKey='+$.hibachi.getConfig().instantiationKey;
+            config.url = config.url + '?instantiationKey='+this.appConfig.instantiationKey;
+
             return config;
         }
         config.cache = true;
         config.headers = config.headers || {};
-        if (this.$window.localStorage.getItem('token') && this.$window.localStorage.getItem('token') !== "undefined") {
+        if (this.localStorageService.hasItem('token')) {
 
-            config.headers.Authorization = 'Bearer ' + this.$window.localStorage.getItem('token');
+            config.headers['Auth-Token'] = 'Bearer ' + this.localStorageService.getItem('token');
         }
         var queryParams = this.utilityService.getQueryParamsFromUrl(config.url);
 		if(config.method == 'GET' && (queryParams[this.appConfig.action] && queryParams[this.appConfig.action] === 'api:main.get')){
@@ -140,12 +144,9 @@ class HibachiInterceptor implements IInterceptor{
 		return config;
     }
     public requestError = (rejection): ng.IPromise<any> => {
-         this.$log.debug('requestError');
 		return this.$q.reject(rejection);
     }
     public response = (response): ng.IPromise<any> => {
-        this.$log.debug('response');
-		console.log(response);
 		if(response.data.messages){
             var alerts = this.alertService.formatMessagesToAlerts(response.data.messages);
             this.alertService.addAlerts(alerts);
@@ -155,8 +156,7 @@ class HibachiInterceptor implements IInterceptor{
     }
     public responseError = (rejection): ng.IPromise<any> => {
 
-		this.$log.debug('responseReject');
-		if(angular.isDefined(rejection.status) && rejection.status !== 404 && rejection.status !== 403 && rejection.status !== 401){
+		if(angular.isDefined(rejection.status) && rejection.status !== 404 && rejection.status !== 403 && rejection.status !== 499){
 			if(rejection.data && rejection.data.messages){
 				var alerts = this.alertService.formatMessagesToAlerts(rejection.data.messages);
 				this.alertService.addAlerts(alerts);
@@ -168,7 +168,7 @@ class HibachiInterceptor implements IInterceptor{
 				this.alertService.addAlert(message);
 			}
 		}
-		if (rejection.status === 401) {
+		if (rejection.status === 499) {
 			// handle the case where the user is not authenticated
 			if(rejection.data && rejection.data.messages){
 				//var deferred = $q.defer();
@@ -177,13 +177,15 @@ class HibachiInterceptor implements IInterceptor{
 					//open dialog
 					this.dialogService.addPageDialog(this.hibachiPathBuilder.buildPartialsPath('preprocesslogin'),{} );
 				}else if(rejection.data.messages[0].message === 'invalid_token'){
-                    return $http.get(this.baseUrl+'/index.cfm/api/auth/login').then((loginResponse:IHibachiInterceptorPromise<any>)=>{
-                        this.$window.localStorage.setItem('token',loginResponse.data.token);
-                        rejection.config.headers = rejection.config.headers || {};
-                        rejection.config.headers.Authorization = 'Bearer ' + this.$window.localStorage.getItem('token');
-                        return $http(rejection.config).then(function(response) {
-                           return response;
-                        });
+                    return $http.get(this.baseUrl+'?'+this.appConfig.action+'=api:main.login').then((loginResponse:IHibachiInterceptorPromise<any>)=>{
+                        if(loginResponse.status === 200){
+                            this.localStorageService.setItem('token',loginResponse.data.token);
+                            rejection.config.headers = rejection.config.headers || {};
+                            rejection.config.headers['Auth-Token'] = 'Bearer ' + loginResponse.data.token;
+                            return $http(rejection.config).then(function(response) {
+                               return response;
+                            });
+                        }
 					},function(rejection){
                         return rejection;
                     });

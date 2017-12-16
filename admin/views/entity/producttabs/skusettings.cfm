@@ -55,6 +55,7 @@ Notes:
 	<swa:SlatwallSetting settingName="skuAllowBackorderFlag" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuAllowPreorderFlag" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuAllowWaitlistingFlag" settingObject="#rc.product#" />
+	<swa:SlatwallSetting settingName="skuRegistrationApprovalRequiredFlag" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuCurrency" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuEligibleCurrencies" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuEligibleFulfillmentMethods" settingObject="#rc.product#" />
@@ -75,7 +76,10 @@ Notes:
 	<swa:SlatwallSetting settingName="skuQATSIncludesQNROVOFlag" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuQATSIncludesQNROSAFlag" settingObject="#rc.product#" />
 	<swa:SlatwallSetting settingName="skuTaxCategory" settingObject="#rc.product#" />
+	
 	<cfif rc.product.getProductType().getBaseProductType() eq "merchandise">
 		<!--- Wrap this arround settings if you want to disable them for certain product types --->
+	<cfelseif rc.product.getProductType().getBaseProductType() eq "event">
+		<swa:SlatwallSetting settingName="skuEventEnforceConflicts" settingObject="#rc.product#" />
 	</cfif>
 </swa:SlatwallSettingTable>

@@ -26,10 +26,12 @@ class Pagination{
 
     //@ngInject
     constructor(
+        public observerService,
         private uuid:string
     ){
         this.uuid = uuid;
         this.selectedPageShowOption = this.pageShowOptions[0];
+        this.observerService.attach(this.setPageRecordsInfo,'swPaginationUpdate');
     }
 
     public getSelectedPageShowOption = () =>{
@@ -38,8 +40,8 @@ class Pagination{
 
     public pageShowOptionChanged = (pageShowOption) => {
         this.setPageShow(pageShowOption.value);
-        this.setCurrentPage(1);
-        this.getCollection();
+        this.currentPage = 1;
+        this.observerService.notify('swPaginationAction',{type:'setPageShow', payload:this.getPageShow()});
     };
 
     public getTotalPages=():number =>{
@@ -83,7 +85,8 @@ class Pagination{
     };
     public setCurrentPage=(currentPage:number):void =>{
         this.currentPage = currentPage;
-        this.getCollection();
+        this.observerService.notify('swPaginationAction',{action:'pageChange', currentPage});
+        this.observerService.notify('swPaginationAction',{type:'setCurrentPage', payload:this.getCurrentPage()});
     };
     public previousPage=():void =>{
         if(this.getCurrentPage() == 1) return;
@@ -91,8 +94,8 @@ class Pagination{
     };
     public nextPage=():void =>{
         if(this.getCurrentPage() < this.getTotalPages()){
-            this.currentPage = this.getCurrentPage() + 1;
-            this.getCollection();
+            this.setCurrentPage(this.getCurrentPage() + 1);
+            this.observerService.notify('swPaginationAction',{type:'nextPage', payload:this.getCurrentPage()});
         }
     };
     public hasPrevious=():boolean =>{
@@ -133,6 +136,9 @@ class Pagination{
         }
         return false;
     };
+    
+    
+    
     public setPageRecordsInfo = (collection):void =>{
         this.setRecordsCount(collection.recordsCount);
         if(this.getRecordsCount() === 0 ){
@@ -171,14 +177,15 @@ class PaginationService implements IPaginationService{
     private paginations = {};
     //@ngInject
     constructor(
-        private utilityService
+        private utilityService,
+        public observerService
     ){
 
     }
 
     public createPagination = ():Pagination =>{
         var uuid= this.utilityService.createID(10);
-        this.paginations[uuid] = new Pagination(uuid);
+        this.paginations[uuid] = new Pagination(this.observerService,uuid);
         return this.paginations[uuid];
     };
 

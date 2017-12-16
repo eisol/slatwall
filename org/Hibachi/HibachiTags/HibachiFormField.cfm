@@ -1,4 +1,3 @@
-<cfimport prefix="swa" taglib="../../../tags" />
 <cfimport prefix="hb" taglib="../../../org/Hibachi/HibachiTags" />
 <cfif thisTag.executionMode is "start">
 	<cfparam name="attributes.fieldType" type="string" />
@@ -7,6 +6,7 @@
 	<cfparam name="attributes.value" type="any" default="" />
 	<cfparam name="attributes.valueOptions" type="array" default="#arrayNew(1)#" />
 	<cfparam name="attributes.valueOptionsSmartList" type="any" default="" />
+	<cfparam name="attributes.valueOptionsCollectionList" type="any" default="" />
 	<cfparam name="attributes.fieldAttributes" type="string" default="" />
 	<cfparam name="attributes.modalCreateAction" type="string" default="" />			<!--- hint: This allows for a special admin action to be passed in where the saving of that action will automatically return the results to this field --->
 
@@ -17,6 +17,7 @@
 	<cfparam name="attributes.removeLink" type="string" default=""/>
 
 	<cfparam name="attributes.multiselectPropertyIdentifier" type="string" default="" />
+	<cfparam name="attributes.showEmptySelectBox" type="boolean" default="#true#" />
 	<!---
 		attributes.fieldType have the following options:
 		checkbox			|	As a single checkbox this doesn't require any options, but it will create a hidden field for you so that the key gets submitted even when not checked.  The value of the checkbox will be 1
@@ -100,10 +101,54 @@
 			</cfoutput>
 		</cfcase>
 		<cfcase value="listingMultiselect">
+			<cfif structKeyExists(attributes,'valueOptionsSmartList') && (isObject(attributes.valueOptionsSmartList) || len(attributes.valueOptionsSmartlist)) >
+				
 			<hb:HibachiListingDisplay smartList="#attributes.valueOptionsSmartList#" multiselectFieldName="#attributes.fieldName#" multiselectValues="#attributes.value#" multiselectPropertyIdentifier="#attributes.multiselectPropertyIdentifier#" title="#attributes.title#" edit="true"></hb:HibachiListingDisplay>
+			<cfelseif structKeyExists(attributes,'valueOptionsCollectionList') >
+				<cfoutput>
+					<cfset scopeVariableID = 'valueOptionsCollectionList#rereplace(createUUID(),'-','','all')#'/>
+					<span ng-init="#scopeVariableID#=$root.hibachiScope.$injector.get('collectionConfigService').newCollectionConfig().loadJson(#rereplace(attributes.valueOptionsCollectionList,'"',"'",'all')#)"></span>
+					<sw-listing-display
+						ng-if="#scopeVariableID#.collectionConfigString"
+					    data-collection-config="#scopeVariableID#"
+					    data-has-search="true"
+					    data-has-action-bar="true"
+					    data-show-filters="true"
+					    show-simple-listing-controls="false"
+					    edit="true"
+						data-multiselect-field-name="#attributes.fieldName#"
+						data-multiselectable="true"
+						data-multi-slot="true"
+						data-multiselect-values="#attributes.value#"
+					>
+					</sw-listing-display>
+				</cfoutput>
+			</cfif>
 		</cfcase>
 		<cfcase value="listingSelect">
+			<cfif structKeyExists(attributes,'valueOptionsSmartList') && (isObject(attributes.valueOptionsSmartList) || len(attributes.valueOptionsSmartlist)) >
 			<hb:HibachiListingDisplay smartList="#attributes.valueOptionsSmartList#" selectFieldName="#attributes.fieldName#" selectvalue="#attributes.value#" edit="true"></hb:HibachiListingDisplay>
+			<cfelseif structKeyExists(attributes,'valueOptionsCollectionList') >
+				<cfoutput>
+					<cfset scopeVariableID = 'valueOptionsCollectionList#rereplace(createUUID(),'-','','all')#'/>
+					<span ng-init="#scopeVariableID#=$root.hibachiScope.$injector.get('collectionConfigService').newCollectionConfig().loadJson(#rereplace(attributes.valueOptionsCollectionList,'"',"'",'all')#)"></span>
+					<sw-listing-display
+						ng-if="#scopeVariableID#.collectionConfigString"
+					    data-collection-config="#scopeVariableID#"
+					    data-has-search="true"
+					    data-has-action-bar="true"
+					    data-show-filters="true"
+					    show-simple-listing-controls="false"
+					    edit="true"
+						data-multiselect-field-name="#attributes.fieldName#"
+						data-multiselectable="true"
+						data-multiselect-values="#attributes.value#"
+						data-multi-slot="true"
+						data-is-radio="true"
+					>
+					</sw-listing-display>
+				</cfoutput>
+			</cfif>
 		</cfcase>
 		<cfcase value="multiselect">
 			<cfoutput>
@@ -167,6 +212,7 @@
 		</cfcase>
 		<cfcase value="select">
 			<cfoutput>
+				<cfif arrayLen(attributes.valueOptions) || attributes.showEmptySelectBox >
 				<select name="#attributes.fieldName#" class="form-control #attributes.fieldClass# j-custom-select" #attributes.fieldAttributes#>
 					<cfloop array="#attributes.valueOptions#" index="option">
 						<cfset thisOptionName = "" />
@@ -177,30 +223,33 @@
 							<cfset thisOptionValue = option />
 						<cfelse>
 							<cfloop collection="#option#" item="key">
-								<cfif key eq "name">
-									<cfset thisOptionName = option[ key ] />
-								<cfelseif key eq "value">
-									<cfset thisOptionValue = option[ key ] />
-								<cfelseif not isNull(key) and structKeyExists(option, key) and not isNull(option[key])>
-									<cfset thisOptionData = listAppend(thisOptionData, 'data-#replace(lcase(key), '_', '-', 'all')#="#option[key]#"', ' ') />
+								<cfif structkeyExists(option,key)>
+									<cfif key eq "name">
+										<cfset thisOptionName = option[ key ] />
+									<cfelseif key eq "value">
+										<cfset thisOptionValue = option[ key ] />
+									<cfelseif not isNull(key) and structKeyExists(option, key) and not isNull(option[key])>
+										<cfset thisOptionData = listAppend(thisOptionData, 'data-#replace(lcase(key), '_', '-', 'all')#="#option[key]#"', ' ') />
+									</cfif>
 								</cfif>
 							</cfloop>
 						</cfif>
 						<option value="#thisOptionValue#" #thisOptionData#<cfif attributes.value EQ thisOptionValue> selected="selected"</cfif>>#thisOptionName#</option>
 					</cfloop>
 				</select>
+				</cfif>
 			</cfoutput>
 		</cfcase>
 		<cfcase value="text">
 			<cfoutput>
-				<input type="text" name="#attributes.fieldName#" value="#htmlEditFormat(attributes.value)#" class="form-control #attributes.fieldClass#" #attributes.fieldAttributes# />
+				<input type="text" name="#attributes.fieldName#" value="#attributes.value#" class="form-control #attributes.fieldClass#" #attributes.fieldAttributes# />
 			</cfoutput>
 		</cfcase>
 		<cfcase value="textautocomplete">
 			<cfoutput>
 				<cfset suggestionsID = reReplace(attributes.fieldName, '[^0-9A-Za-z]','','all') & "-suggestions" />
 				<div class="autoselect-container">
-					<input type="hidden" name="#attributes.fieldName#" value="#htmlEditFormat(attributes.value)#" />
+					<input type="hidden" name="#attributes.fieldName#" value="#attributes.value#" />
 					<input type="text" name="#reReplace(attributes.fieldName, '[^0-9A-Za-z]','','all')#-autocompletesearch" autocomplete="off" class="textautocomplete #attributes.fieldClass# form-control" data-acfieldname="#attributes.fieldName#" data-sugessionsid="#suggestionsID#" #attributes.fieldAttributes# <cfif len(attributes.value)>disabled="disabled"</cfif> />
 					<div class="autocomplete-selected" <cfif not len(attributes.value)>style="display:none;"</cfif>><a href="##" class="textautocompleteremove"><i class="glyphicon glyphicon-remove"></i></a> <span class="value" id="selected-#suggestionsID#"><cfif len(attributes.value)>#attributes.autocompleteSelectedValueDetails[ attributes.autocompleteNameProperty ]#</cfif></span></div>
 					<div class="autocomplete-options" style="display:none;">
@@ -231,7 +280,7 @@
 		</cfcase>
 		<cfcase value="textarea">
 			<cfoutput>
-				<textarea name="#attributes.fieldName#" class="#attributes.fieldClass# form-control" #attributes.fieldAttributes#>#htmlEditFormat(attributes.value)#</textarea>
+				<textarea name="#attributes.fieldName#" class="#attributes.fieldClass# form-control" #attributes.fieldAttributes#>#attributes.value#</textarea>
 			</cfoutput>
 		</cfcase>
 		<cfcase value="time">
@@ -240,6 +289,10 @@
 			</cfoutput>
 		</cfcase>
 		<cfcase value="wysiwyg">
+			<!--- need to always have application key in ckfinder --->
+			<cfset attributes.fieldAttributes = listAppend(attributes.fieldAttributes,'applicationkey="#request.context.fw.getHibachiScope().getApplicationValue('applicationKey')#"',' ' )/>
+			
+			<cfset request.isWysiwygPage = true />
 			<cfoutput>
 				<textarea name="#attributes.fieldName#" class="#attributes.fieldClass# wysiwyg form-control" #attributes.fieldAttributes#>#attributes.value#</textarea>
 			</cfoutput>

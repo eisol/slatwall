@@ -60,18 +60,27 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 	}
 
 	public void function after( required struct rc ) {
-		if(structKeyExists(arguments.rc, "fRedirectURL") && arrayLen(arguments.rc.$.slatwall.getFailureActions())) {
+		if(structKeyExists(arguments.rc, "fRedirectURL") && arrayLen(getHibachiScope().getFailureActions())) {
 			getFW().redirectExact( redirectLocation=arguments.rc.fRedirectURL );
-		} else if (structKeyExists(arguments.rc, "sRedirectURL") && !arrayLen(arguments.rc.$.slatwall.getFailureActions())) {
+		} else if (structKeyExists(arguments.rc, "sRedirectURL") && !arrayLen(getHibachiScope().getFailureActions())) {
 			getFW().redirectExact( redirectLocation=arguments.rc.sRedirectURL );
 		} else if (structKeyExists(arguments.rc, "redirectURL")) {
 			getFW().redirectExact( redirectLocation=arguments.rc.redirectURL );
 		}
 	}
 
+	// File
 	public void function downloadFile(required struct rc) {
-		var file = getService("FileService").downloadFile(fileID=rc.fileID);
-
+		//again check that the user should be downloading this.
+		var file = getService("fileService").getFile(rc.fileID);
+		var fileService = getService("fileService");
+		if (!isNull(file)){
+			var fileGroup = file.getFileGroup();
+			if (!isNull(fileGroup) && fileService.allowAccountToAccessFile(fileGroup, getHibachiScope().getLoggedInFlag())){
+				 //they can download the file.
+				 file = getService("fileService").downloadFile(fileID=rc.fileID);
+			}
+		}
 		if (file.hasErrors())
 		{
 			file.showErrorsAndMessages();
@@ -87,13 +96,13 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 		if( !isNull(product) ) {
 			product = getProductService().processProduct( product, arguments.rc, 'addProductReview');
 
-			arguments.rc.$.slatwall.addActionResult( "public:product.addProductReview", product.hasErrors() );
+			getHibachiScope().addActionResult( "public:product.addProductReview", product.hasErrors() );
 
 			if(!product.hasErrors()) {
 				product.clearProcessObject("addProductReview");
 			}
 		} else {
-			arguments.rc.$.slatwall.addActionResult( "public:product.addProductReview", true );
+			getHibachiScope().addActionResult( "public:product.addProductReview", true );
 		}
 	}
 

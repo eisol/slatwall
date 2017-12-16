@@ -54,6 +54,7 @@ Notes:
 		<swa:SlatwallSetting settingName="skuAllowBackorderFlag" />
 		<swa:SlatwallSetting settingName="skuAllowPreorderFlag" />
 		<swa:SlatwallSetting settingName="skuAllowWaitlistingFlag" />
+		<swa:SlatwallSetting settingName="skuRegistrationApprovalRequiredFlag" />
 		<swa:SlatwallSetting settingName="skuBundleAutoMakeupInventoryOnSaleFlag" />
 		<swa:SlatwallSetting settingName="skuBundleAutoBreakupInventoryOnReturnFlag" />
 		<swa:SlatwallSetting settingName="skuCurrency" />
@@ -63,6 +64,7 @@ Notes:
 		<swa:SlatwallSetting settingName="skuEligibleOrderOrigins" />
 		<swa:SlatwallSetting settingName="skuEligiblePaymentMethods" />
 		<swa:SlatwallSetting settingName="skuEmailFulfillmentTemplate" />
+		<swa:SlatwallSetting settingName="skuEventEnforceConflicts" />
 		<swa:SlatwallSetting settingName="skuGiftCardEmailFulfillmentTemplate" />
 		<swa:SlatwallSetting settingName="skuGiftCardAutoGenerateCode" />
 		<swa:SlatwallSetting settingName="skuGiftCardCodeLength" />
@@ -70,7 +72,7 @@ Notes:
 		<swa:SlatwallSetting settingName="skuHoldBackQuantity" />
 		<swa:SlatwallSetting settingName="skuOrderMinimumQuantity" />
 		<swa:SlatwallSetting settingName="skuOrderMaximumQuantity" />
-		<swa:SlatwallSetting settingName="skuRegistrationApprovalRequiredFlag" />
+		<swa:SlatwallSetting settingName="skuMinimumPercentageAmountRecievedRequiredToPlaceOrder" />
 		<swa:SlatwallSetting settingName="skuShippingWeight" />
 		<swa:SlatwallSetting settingName="skuShippingWeightUnitCode" />
 		<swa:SlatwallSetting settingName="skuTrackInventoryFlag" />
@@ -78,6 +80,7 @@ Notes:
 		<swa:SlatwallSetting settingName="skuQATSIncludesQNROVOFlag" />
 		<swa:SlatwallSetting settingName="skuQATSIncludesQNROSAFlag" />
 		<swa:SlatwallSetting settingName="skuTaxCategory" />
+		<swa:SlatwallSetting settingName="skuShippingCostExempt" />
 	</swa:SlatwallSettingTable>
 </cfoutput>
 

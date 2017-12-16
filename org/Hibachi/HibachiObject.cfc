@@ -17,6 +17,15 @@ component accessors="true" output="false" persistent="false" {
 		return false;
 	}
 	
+	public string function getRemoteAddress(){
+		var clientIP = cgi.remote_addr;
+		var clientHeaders = GetHttpRequestData().headers;
+		if(structKeyExists(clientHeaders,"X-Forwarded-For")){
+			clientIP = clientHeaders["X-Forwarded-For"];
+		}
+		return clientIP;
+	}
+	
 	// @help Public method to determine if this is a processObject.  This is overridden in the HibachiProcess.cfc
 	public any function isProcessObject() {
 		return false;
@@ -33,6 +42,23 @@ component accessors="true" output="false" persistent="false" {
 	public any function getBean(required string beanName) {
 		return getBeanFactory().getBean( arguments.beanName );
 	}
+	
+	// @hint has a bean out of whatever the fw1 bean factory is
+	public any function hasBean(required string beanName) {
+		return getBeanFactory().containsBean( arguments.beanName );
+	}
+	// @hint sets bean factory
+	public void function setBeanFactory(required any beanFactory) {
+		application[ getApplicationValue('applicationKey') ].factory = arguments.beanFactory;
+	}
+
+	// @hint whether or not we have a bean
+	public boolean function hasService(required string serviceName){
+		if(!hasApplicationValue("service_#arguments.serviceName#")){
+			return hasBean(arguments.serviceName);
+		}
+		return true;
+	} 
 	
 	// @hint returns an application scope cached version of the service
 	public any function getService(required string serviceName) {
@@ -179,13 +205,17 @@ component accessors="true" output="false" persistent="false" {
 		return getHibachiScope().rbKey(arguments.key);
 	}
 	
+	public string function hibachiHTMLEditFormat(required any html=""){
+		return getHibachiScope().hibachiHTMLEditFormat(arguments.html);
+	}
+	
 	public string function buildURL() {
 		return getApplicationValue("application").buildURL(argumentcollection=arguments);
 	}
 	
 	public any function formatValue( required string value, required string formatType, struct formatDetails={} ) {
 		return getService("hibachiUtilityService").formatValue(argumentcollection=arguments);
-	}
+	} 
 	
 	// =========================  END:  DELIGATION HELPERS ==========================================
 	// ========================= START: APPLICATION VAUES ===========================================
@@ -216,6 +246,19 @@ component accessors="true" output="false" persistent="false" {
 		return false;
 	}
 	
+	public void function clearApplicationValueByPrefix(required any prefix){
+		if( structKeyExists(application, getHibachiInstanceApplicationScopeKey())) {
+			for(var key in application[ getHibachiInstanceApplicationScopeKey() ]){
+				if(
+					len(arguments.prefix) < len(key)
+					&& arguments.prefix == left(key,len(prefix))
+				){
+					clearApplicationValue(key);
+				}
+			}
+		}
+	}
+	
 	// @hint facade method to check the application scope for a value
 	public void function clearApplicationValue(required any key) {
 		if( structKeyExists(application, getHibachiInstanceApplicationScopeKey()) && structKeyExists(application[ getHibachiInstanceApplicationScopeKey() ], arguments.key)) {
@@ -229,7 +272,7 @@ component accessors="true" output="false" persistent="false" {
 			return application[ getHibachiInstanceApplicationScopeKey() ][ arguments.key ];
 		}
 		
-		throw("You have requested a value for '#arguments.key#' from the core hibachi application that is not setup.  This may be because the verifyApplicationSetup() method has not been called yet")
+		throw("You have requested a value for '#arguments.key#' from the core hibachi application that is not setup.  This may be because the verifyApplicationSetup() method has not been called yet");
 	}
 	
 	// @hint facade method to set values in the application scope 

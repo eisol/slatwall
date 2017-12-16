@@ -55,156 +55,1372 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		variables.entityService = request.slatwallScope.getService("hibachiCollectionService");
 		variables.entity = variables.entityService.newCollection();
 		variables.entity.setCollectionObject('Account');
-
-
+	}
+	
+	public boolean function returnFalse(){
+		return false;
 	}
 
-//	tests need default data inserted before asserting
-//	public void function addFilterTest(){
-//		var myCollection = variables.entityService.getProductCollectionList();
-//
-//		myCollection.addFilter('asdf','tester444');
-//		myCollection.addFilter('productName','tester444');
-//		myCollection.addFilter('activeFlag','YES');
-//		var pageRecords = myCollection.getPageRecords();
-//		addToDebug(myCollection.getHQL());
-//	}
-//
-//	public void function displayPropertyTest(){
-//		var myCollection = variables.entityService.getProductCollectionList();
-//		myCollection.setDisplayProperties('productCode,activeFlag');
-//		myCollection.addDisplayProperty('asdf');
-//		var pageRecords = myCollection.getPageRecords();
-//		addToDebug(myCollection.getHQL());
-//	}
+	/**
+	* @test
+	*/
+	public void function sessionBasedFiltersTest(){
+		var collectionEntity = request.slatwallScope.getService('HibachiCollectionService').getAccountCollectionList();
+		collectionEntity.setDisplayProperties('firstName');
+		collectionEntity.addFilter('firstName', '${account.firstName}');
 
-//	public void function addOrderByTest(){
-//		var myCollection = variables.entityService.getProductCollectionList();
-//		myCollection.setOrderBy('activeFlag|asc,productCode|desc');
-//		//myCollection.addOrderBy('productCode|desc');
-//		addToDebug(myCollection.getCollectionConfigStruct());
-//		var pageRecords = myCollection.getPageRecords();
-//		addToDebug(pageRecords);
-//	}
+		collectionEntity.getPageRecords();
+		var collectionParams = collectionEntity.getHqlParams();
+		assert( collectionParams[listFirst(StructKeyList(collectionParams))] ==  'BigBoy');
+	}
+	
+	/**
+	* @test
+	*/
+	public void function getCollectionReportTest(){
+		var collectionEntity = request.slatwallScope.getService('HibachiCollectionService').getAccountCollectionList();
+		collectionEntity.setDisplayProperties('firstName');
+		collectionEntity.addDisplayAggregate('firstName',"COUNT",'itemCount');
+		collectionEntity.addOrderBy('firstName');
+		
+		var pageRecords = collectionEntity.getPageRecords();
+	}
+	
+	/**
+	* @test
+	*/
+	public void function getLeafNodesOnlyTest(){
+		//TODO: setup up heirarchy with leaf nodes to assert
+		
+		var productTypeCollectionList = request.slatwallScope.getService('hibachiService').getProductTypeCollectionList();
+		productTypeCollectionList.setFilterByLeafNodesFlag(true);
+		debug(productTypeCollectionList.getHQL());
+		debug(productTypeCollectionList.getPageRecords());
+		
+		assert(productTypeCollectionList.getFilterByLeafNodesFlag());
+	}
+	
+	//test that if we trun enforce auth off but also aren't authenticated that only 1st level props are available
+	/**
+	* @test
+	*/
+	public void function backendCollectionAuthorizedTest(){
+		var skuCollection = variables.entityService.getSkuCollectionList();
+		var hibachiAuthenticationServiceFake = new Slatwall.model.service.HibachiAuthenticationService();
+		hibachiAuthenticationServiceFake.authenticateCollectionCrudByAccount = returnFalse;
+		hibachiAuthenticationServiceFake.authenticateCollectionPropertyIdentifierCrudByAccount=returnFalse;
+		request.slatwallScope.setHibachiAuthenticationService(hibachiAuthenticationServiceFake);
+		skuCollection.addColumn({propertyIdentifier='product.productName'});
+		skuCollection.getPageRecords();
+		//test checks to make sure that if the user is public and authentication isn't enforced that all dot chained properties must be declared explicity in authorized Properties via backend
+		assert(!arrayFind(skuCollection.getAuthorizedProperties(),'product_productName'));
+		
+		//manually adding to the whitelist
+		skuCollection.addAuthorizedProperty('product.productName');
+		
+		skuCollection.getPageRecords();
+		assert(arrayFind(skuCollection.getAuthorizedProperties(),'product_productName'));
+		
+		skuCollection.addDisplayProperty('product.productCode');
+		assert(arrayFind(skuCollection.getAuthorizedProperties(),'product_productCode'));
+		
+	}
+	/**
+	* @test
+	*/
+	public void function fixBadCollectionConfigTest(){
+		var collectionEntityData = {
+			collectionid = '',
+			collectionCode = 'RyansAccountOrders'&createUUID(),
+			collectionName = 'RyansAccountOrders'&createUUID(),
+			collectionConfig = '
+				{
+					"baseEntityName":"SlatwallAccount",
+					"baseEntityAlias":"Account",
+					"columns":[
+						{
+							"propertyIdentifier":""
+						},
+						{
+							"propertyIdentifier":"Account.firstName"
+						}
+					],
+					"joins":[
+						{
+							"associationName":"orders",
+							"alias":"Account_orders"
+						}
+					],
+					"orderBy":[
+						{
+							"propertyIdentifier":"Account.firstName",
+							"direction":"DESC"
+						}
+					],
+					"groupBy":[
+						{
+							"propertyIdentifier":"accountID"
+						}
+					],
+					"filterGroups":[
+						{
+							"filterGroup":[
+								{
+									"propertyIdentifier":"",
+									"comparisonOperator":"",
+									"value":""
+								},
+								{
+									"logicalOperator":"AND",
+									"propertyIdentifier":"",
+									"comparisonOperator":"",
+									"value":""
+								}
+							]
+
+						},
+						{
+							"filterGroup":[
+								{
+									"propertyIdentifier":"",
+									"comparisonOperator":"",
+									"value":""
+								}
+							]
+
+						}
+					]
+
+				}
+			',
+			collectionObject = "SlatwallAccount"
+		};
+		var collectionEntity = createPersistedTestEntity('collection',collectionEntityData);
+		
+		var pageRecords = collectionEntity.getPageRecords();
+		
+		assert(isArray(pageRecords));
+		
+	}
+	
+	/**
+	* @test
+	*/
+	public void function applyDataTest_pageShowTest(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		
+		var data = {};
+		data['p:show'] =2;
+		
+		collectionEntity.applyData(data);
+		
+		assertEquals(collectionEntity.getPageRecordsShow(),2);
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_pageShowTest_queryString(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		
+		var queryString = '?p:show=2&p:current=3';
+		
+		collectionEntity.applyData(queryString);
+		
+		assertEquals(collectionEntity.getPageRecordsShow(),2);
+		assertEquals(collectionEntity.getCurrentPageDeclaration(),3);
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_filterTest_queryString(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		
+		var queryString = '?f:firstName:eq=Ryan';
+		
+		collectionEntity.applyData(queryString);
+		var filter = collectionEntity.getCollectionConfigStruct().filterGroups[1].filterGroup[1];
+		assert(filter.propertyIdentifier == '_account.firstName');
+		assert(filter.comparisonOperator == '=');
+		assert(filter.value == 'Ryan');
+		assert(collectionEntity.getHQL() Contains '_account.firstName = ');
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_currentPageTest(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		var data = {};
+		data['p:current'] = 72;
+		collectionEntity.applyData(data);
+		assertEquals(collectionEntity.getCurrentPageDeclaration(),72);
+	}
+	/**
+	* @test
+	*/
+	public void function applyData_filterEqualsTest(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		var data = {};
+		data['f:firstName:eq']='Ryan';
+		collectionEntity.applyData(data);
+		var filter = collectionEntity.getCollectionConfigStruct().filterGroups[1].filterGroup[1];
+		assert(filter.propertyIdentifier == '_account.firstName');
+		assert(filter.comparisonOperator == '=');
+		assert(filter.value == 'Ryan');
+		assert(collectionEntity.getHQL() Contains '_account.firstName = ');
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_filterRangeTest_queryString(){
+		var collectionEntity = variables.entityService.getSkuCollectionList();
+		
+		var queryString = '?r:price=20^100';
+		
+		collectionEntity.applyData(queryString);
+		var filter = collectionEntity.getCollectionConfigStruct().filterGroups[2].filterGroup[1];
+		assertEquals(filter.propertyIdentifier,'_sku.price');
+		assertEquals(filter.comparisonOperator,'BETWEEN');
+		assertEquals(filter.value,'20-100');
+		assert(collectionEntity.getHQL() CONTAINS '_sku.price BETWEEN ');
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_filterStartRangeTest_queryString(){
+		var collectionEntity = variables.entityService.getSkuCollectionList();
+		
+		var queryString = '?r:price=20^';
+		
+		collectionEntity.applyData(queryString);
+		var filter = collectionEntity.getCollectionConfigStruct().filterGroups[2].filterGroup[1];
+		assertEquals(filter.propertyIdentifier,'_sku.price');
+		assertEquals(filter.comparisonOperator,'>=');
+		assertEquals(filter.value,'20');
+		assert(collectionEntity.getHQL() CONTAINS '_sku.price >= ');
+		
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_filterEndRangeTest_queryString(){
+		var collectionEntity = variables.entityService.getSkuCollectionList();
+		
+		var queryString = '?r:price=^100';
+		
+		collectionEntity.applyData(queryString);
+		var filter = collectionEntity.getCollectionConfigStruct().filterGroups[2].filterGroup[1];
+		assertEquals(filter.propertyIdentifier,'_sku.price');
+		assertEquals(filter.comparisonOperator,'<=');
+		assertEquals(filter.value,'100');
+		assert(collectionEntity.getHQL() CONTAINS '_sku.price <= ');
+	}
+	/**
+	* @test
+	*/
+	public void function applyDataTest_orderByTest_queryString(){
+		var collectionEntity = variables.entityService.getSkuCollectionList();
+		
+		var queryString = '?orderby=price|DESC,skuName|ASC';
+		collectionEntity.applyData(queryString);
+		
+		var orderBy = collectionEntity.getCollectionConfigStruct().orderBy;
+		assertEquals(orderBy[1].propertyIdentifier,'_sku.price');
+		assertEquals(orderBy[1].direction,'DESC');
+		
+		assertEquals(orderBy[2].propertyIdentifier,'_sku.skuName');
+		assertEquals(orderBy[2].direction,'ASC');
+		assert(collectionEntity.getHQL() CONTAINS 'ORDER BY _sku.price DESC ,_sku.skuName ASC');
+	}
+	/**
+	* @test
+	*/
+	public void function applyData_removeFilterTest_queryString(){
+		var collectionEntity = variables.entityService.getSkuCollectionList();
+		collectionEntity.addFilter('price',1);
+		//make sure filter was added
+		assertTrue(arrayLen(collectionEntity.getCollectionConfigStruct().filterGroups[1].filterGroup));
+		var queryString = "?fr:price:eq=1";
+		collectionEntity.applyData(queryString);
+		//make sure filter was removed
+		assertFalse(arrayLen(collectionEntity.getCollectionConfigStruct().filterGroups[1].filterGroup));
+	}
+	/**
+	* @test
+	*/
+	public void function displayPropertyAliasTest(){
+		var collectionEntity = variables.entityService.getAccountCollectionList();
+		collectionEntity.setDisplayProperties('firstName|MyFirstName,lastName|MyLastName');
+
+		var collectionRecords = collectionEntity.getPageRecords();
+		assert( structKeyExists(collectionRecords[1], 'MyFirstName'));
+		assert( structKeyExists(collectionRecords[1], 'MyLastName'));
+
+	}
+	/**
+	* @test
+	*/
+	public void function addFilterTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productActiveData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		//By default Active flag is true.
+		var product = createPersistedTestEntity('product', productActiveData);
+
+		var productNotActiveData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			activeFlag = 'false'
+		};
+		var product = createPersistedTestEntity('product', productNotActiveData);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productName','ProductUnitTest');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 2, "Wrong amount of products returned! Expecting 2 records but returned #arrayLen(pageRecords)#");
+
+		var myProductActiveCollection = variables.entityService.getProductCollectionList();
+		myProductActiveCollection.setDisplayProperties('productName,productDescription');
+		myProductActiveCollection.addFilter('productName','ProductUnitTest');
+		myProductActiveCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myProductActiveCollection.addFilter('activeFlag','YES');
+		var pageRecords = myProductActiveCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 1, "Wrong amount of products returned! Expecting 1 record but returned #arrayLen(pageRecords)#");
+
+	}	
+	
+	/**
+	* @test
+	*/
+	public void function addFilterToFilterGroupsTest(){
+
+		var uniqueNumberForTest = createUUID();
+
+		var productActiveData = {
+			productID = '',
+			productName = 'FilterGroupProduct1',
+			productCode = "FGP1",
+			productDescription = uniqueNumberForTest
+		};
+		//By default Active flag is true.
+		var product = createPersistedTestEntity('product', productActiveData);
+
+		var productNotActiveData = {
+			productID = '',
+			productName = 'FilterGroupProduct2',
+			productCode = "FGP2",
+			productDescription = uniqueNumberForTest,
+			activeFlag = 'false'
+		};
+		var product = createPersistedTestEntity('product', productNotActiveData);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productDescription',uniqueNumberForTest);
+		var pageRecords = myProductCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 2, "Wrong amount of products returned! Expecting 2 records but returned #arrayLen(pageRecords)#");
+
+		myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productDescription',uniqueNumberForTest);
+		myProductCollection.addFilter('productCode','FGP1', "=", "OR", "", "productCodeFilterGroup");
+		myProductCollection.addFilter('productCode','FGP2', "=", "OR", "", "productCodeFilterGroup");
+		var pageRecords = myProductCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 2, "Wrong amount of products returned! Expecting 2 record but returned #arrayLen(pageRecords)#");
+
+		myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productDescription',uniqueNumberForTest);
+		myProductCollection.addFilter('productCode','FGP1', "=", "OR", "", "productCodeFilterGroup1");
+		myProductCollection.addFilter('productCode','FGP2', "=", "OR", "", "productCodeFilterGroup2", "OR");
+		var pageRecords = myProductCollection.getPageRecords();
+		
+		assertTrue(arrayLen(pageRecords) == 2, "Wrong amount of products returned! Expecting 2 record but returned #arrayLen(pageRecords)#");
+		
+		myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productDescription',uniqueNumberForTest);
+		myProductCollection.addFilter('productCode','FGP1', "=", "OR", "", "productCodeFilterGroup1");
+		myProductCollection.addFilter('productCode','FGP2', "=", "OR", "", "productCodeFilterGroup2");//AND is the default filter group comparison operator
+		var pageRecords = myProductCollection.getPageRecords();
+		
+		assertTrue(arrayLen(pageRecords) == 0, "Wrong amount of products returned! Expecting 0 record but returned #arrayLen(pageRecords)#");
+		
+	}
+	/**
+	* @test
+	*/
+	public void function addFilterOneToManyTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithoutActiveSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID(),
+					activeFlag = 'false'
+				},
+				{
+					skuID = '',
+					skuCode= createUUID(),
+					activeFlag = 'false'
+				}
+			]
+		};
+		var productWithoutActiveSkus = createPersistedTestEntity('product', productWithoutActiveSkusData);
+
+
+		var productWithActiveSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID(),
+					activeFlag = 'false'
+				}
+			]
+		};
+		//By default Active flag is true.
+		var SkusInActiveProducts = createPersistedTestEntity('product', productWithActiveSkusData);
 
 
 
-//	public void function addDisplayAggregateTest(){
-//
-//
-//
-//		var myCollection = variables.entityService.getSkuCollectionList();
-//		myCollection.setDisplayProperties('product.productName,price');
-//		myCollection.addFilter('skuID','402828904e79c0a5014e8dc30190060c');
-//		myCollection.addDisplayAggregate('product','count','productCount');
-//		var aggregateHQL = myCollection.getHQL();
-//		//debug(aggregateHQL);
-//		var pageRecords = myCollection.getPageRecords();
-//		//debug(pageRecords);
-//		assertEquals(1,pageRecords[1]['productCount']);
-//	}
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName,productDescription');
+		myProductCollection.addFilter('productName','ProductUnitTest');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myProductCollection.addFilter('skus.activeFlag','YES');
+		var pageRecords = myProductCollection.getPageRecords();
 
-//	public void function addDisplayAggregate_one_to_manyTest(){
-//		var myCollection = variables.entityService.getProductCollectionList();
-//		myCollection.setDisplayProperties('productName');
-//		myCollection.addDisplayAggregate('skus','count','skuCount');
-//		myCollection.addDisplayAggregate('attributeValues','count','attributeValuesCount');
-//		var aggregateHQL = myCollection.getHQL();
-//		debug(aggregateHQL);
-//		var pageRecords = myCollection.getPageRecords();
-//		debug(pageRecords);
-//		//assertEquals(1,pageRecords[1]['skuCount']);
-//
-//	}
+		assertTrue(arrayLen(pageRecords) == 1, "Wrong amount of products returned! Expecting 1 record but returned #arrayLen(pageRecords)#");
 
-	/*public void function addDisplayAggregateSUMTest(){
-		var myCollection = variables.entityService.getSkuCollectionList();
-		myCollection.setDisplayProperties('skuID,price');
-		myCollection.addFilter('skuID','402828904e79c0a5014e8dc3016c060a,402828904e79c0a5014e8dc30190060c','IN');
-		myCollection.addDisplayAggregate('price','SUM','productPriceTotal');
-		var aggregateHQL = myCollection.getHQL();
+	}
+	
+	/**
+	* @test
+	*/
+	public void function addOrderByTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productData1 = {
+			productID = '',
+			productName = 'dProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData1);
+
+		var productData2 = {
+			productID = '',
+			productName = 'cProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+		var productData3 = {
+			productID = '',
+			productName = 'bProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData3);
+
+		var productData4 = {
+			productID = '',
+			productName = 'aProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData4);
+
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.setOrderBy('productName|asc');
+
 		var pageRecords = myCollection.getPageRecords();
 
-		assertEquals(30.00,pageRecords[1]['productPriceTotal']);
+		assertTrue(arraylen(pageRecords) == 4,  "Wrong amount of products returned! Expecting 4 records but returned #arrayLen(pageRecords)#");
+
+		assertTrue(pageRecords[1]['productName'] == 'aProduct', "'aProduct' was expected in the 1st record");
+		assertTrue(pageRecords[2]['productName'] == 'bProduct', "'bProduct' was expected in the 2nd record");
+		assertTrue(pageRecords[3]['productName'] == 'cProduct', "'cProduct' was expected in the 3rd record");
+		assertTrue(pageRecords[4]['productName'] == 'dProduct', "'dProduct' was expected in the 4rt record");
 	}
 
-	public void function addDisplayAggregateAVGTest(){
-		var myCollection = variables.entityService.getSkuCollectionList();
-		myCollection.addFilter('skuID','402828904e79c0a5014e8dc3016c060a,402828904e79c0a5014e8dc30190060c','IN');
-		myCollection.addDisplayAggregate('price','avg','productMinPrice');
+	/**
+	* @test
+	*/
+	public void function removeOrderByTest(){
+		var productCollectionList = variables.entityService.getCollectionList('Product');
+    if (!isNull(productCollectionList.getCollectionConfigStruct())){
+			var orderByExists = structKeyExists(productCollectionList.getCollectionConfigStruct(),'orderBy');
+	  }
 
-		var pageRecords = myCollection.getPageRecords();
-		addToDebug(pageRecords);
-		assertEquals(15.00,pageRecords[1]['productMinPrice']);
+		productCollectionList.addOrderBy('productName|asc');
+		assertEquals('YES', arrayLen(productCollectionList.getCollectionConfigStruct().orderBy)==1);
+		productCollectionList.addOrderBy('productDesc|DESC');
+		assertEquals('YES', arrayLen(productCollectionList.getCollectionConfigStruct().orderBy)==2);
+		productCollectionList.removeOrderBy('productName|asc');
+		assertEquals('YES', arrayLen(productCollectionList.getCollectionConfigStruct().orderBy)==1);
+	}
+
+	/**
+	* @test
+	*/
+	public void function addOrderBy_defaultDirection_Test(){
+		var productCollectionList = variables.entityService.getCollectionList('Product');
+		if (!isNull(productCollectionList.getCollectionConfigStruct())){
+			var orderByExists = structKeyExists(productCollectionList.getCollectionConfigStruct(),'orderBy');
+		}
+
+		productCollectionList.addOrderBy('productName');
+		assertEquals('YES', arrayLen(productCollectionList.getCollectionConfigStruct().orderBy)==1);
+		assertEquals('YES', productCollectionList.getCollectionConfigStruct().orderBy[1].direction == "asc");
+	}
+
+	/**
+	* @test
+	*/
+	public void function addFilterManyToOneTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		//Inactive product with 2 active skulls
+		var productWithoutActiveSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			activeFlag='false',
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				}
+			]
+		};
+		var productWithoutActiveSkus = createPersistedTestEntity('product', productWithoutActiveSkusData);
+
+		//Active product with 4 active skuls
+		var productWithActiveSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID(),
+					activeFlag = 'false'
+				}
+			]
+		};
+
+		var productWithActiveSkus = createPersistedTestEntity('product', productWithActiveSkusData);
+
+		//Get Active Skulls from Active Products
+
+		var mySkuCollection = variables.entityService.getSkuCollectionList();
+		mySkuCollection.setDisplayProperties('skuID');
+		mySkuCollection.addFilter('activeFlag','YES');
+		mySkuCollection.addFilter('product.activeFlag','YES');
+		mySkuCollection.addFilter('product.productDescription',uniqueNumberForDescription);
+		var pageRecords = mySkuCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 4, "Wrong amount of products returned! Expecting 4 records but returned #arrayLen(pageRecords)#");
+
+	}
+	
+	
+	/**
+	* @test
+	*/
+	public void function displayPropertyTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+
+		var product = createPersistedTestEntity('product', productData);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productID,productName');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+
+
+		assertTrue(arraylen(pageRecords) == 1,  "Wrong amount of products returned! Expecting 1 record but returned #arrayLen(pageRecords)#");
+
+		assertTrue(structKeyExists(pageRecords[1], 'productDescription'), "The collection didn't return productDescription property");
+
+		assertTrue(len(trim(pageRecords[1]['productDescription'])) == 0, "The collection returned value for non requested property");
+
+	}
+
+	/**
+	* @test
+	*/
+	public void function displayPropertyManyToOneTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID(),
+					activeFlag = 'false'
+				}
+			]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
+
+		var mySkuCollection = variables.entityService.getSkuCollectionList();
+		mySkuCollection.setDisplayProperties('skuID,skuCode,product.productName');
+		mySkuCollection.addFilter('product.productDescription',uniqueNumberForDescription);
+		var pageRecords = mySkuCollection.getPageRecords();
+
+		assertTrue(arraylen(pageRecords) == 2,  "Wrong amount of products returned! Expecting 2 records but returned #arrayLen(pageRecords)#");
+
+		assertTrue(structKeyExists(pageRecords[1], 'product_productName'), "The collection didn't requested property");
+
+		assertFalse(structKeyExists(pageRecords[1], 'product_productDescription'), "The collection returned not requested related property");
+
+		assertTrue(len(trim(pageRecords[1]['product_productName'])) > 0, "The collection didn't returned value for requested property");
+
 	}
 
 
-	public void function addDisplayAggregateMINTest(){
-		var myCollection = variables.entityService.getSkuCollectionList();
-		myCollection.addFilter('skuID','402828904e79c0a5014e8dc3016c060a,402828904e79c0a5014e8dc30190060c','IN');
-		myCollection.addDisplayAggregate('price','min','productMaxPrice');
+	/**
+	* @test
+	*/
 
-		var pageRecords = myCollection.getPageRecords();
+	public void function getPrimaryIDsTest(){
 
-		assertEquals(10.00,pageRecords[1]['productMaxPrice']);
+		var uniqueNumberForDescription = createUUID();
+
+		var productData1 = {
+			productID = '',
+			productName = 'dProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData1);
+
+		var productData2 = {
+			productID = '',
+			productName = 'cProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+		var productData3 = {
+			productID = '',
+			productName = 'bProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData3);
+
+		var productData4 = {
+			productID = '',
+			productName = 'aProduct',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData4);
+
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.setOrderBy('productName|asc');
+
+
+		var collectionConfigStruct = myCollection.getCollectionConfigStruct();
+
+		var pageRecords = myCollection.getPrimaryIDs(2);
+		assertTrue(arraylen(pageRecords) == 2,  "Wrong amount of products returned! Expecting 2 records but returned #arrayLen(pageRecords)#");
+
+		var pageRecords = myCollection.getPrimaryIDs();
+		assertTrue(arraylen(pageRecords) == 4,  "Wrong amount of products returned! Expecting 4 records but returned #arrayLen(pageRecords)#");
 	}
 
-	public void function addDisplayAggregateMAXTest(){
-		var myCollection = variables.entityService.getSkuCollectionList();
-		myCollection.addFilter('skuID','402828904e79c0a5014e8dc3016c060a,402828904e79c0a5014e8dc30190060c','IN');
-		myCollection.addDisplayAggregate('price','max','productPriceTotal');
 
-		var pageRecords = myCollection.getPageRecords();
+	public void function addOrderByAliasTest(){
 
-		assertEquals(20.00,pageRecords[1]['productPriceTotal']);
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.setOrderBy('productName|asc');
+
+		var collectionConfigStruct = myCollection.getCollectionConfigStruct();
+
+		assertTrue(collectionConfigStruct.orderBy[1]['propertyIdentifier'] == '_product.productName', "Wrong Order by Alias! Expecting '_product.productName' but returned #collectionConfigStruct.orderBy[1]['propertyIdentifier']#");
 	}
 
+
+	public void function addOrderByAlias2Test(){
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.setOrderBy('_product.productName|asc');
+
+		var collectionConfigStruct = myCollection.getCollectionConfigStruct();
+
+		assertTrue(collectionConfigStruct.orderBy[1]['propertyIdentifier'] == '_product.productName', "Wrong Order by Alias! Expecting '_product.productName' but returned #collectionConfigStruct.orderBy[1]['propertyIdentifier']#");
+	}
+
+	public void function addOrderByAliasFromRelatedObjectTest(){
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.setOrderBy('brand.brandName|asc');
+
+		var collectionConfigStruct = myCollection.getCollectionConfigStruct();
+
+		assertTrue(collectionConfigStruct.orderBy[1]['propertyIdentifier'] == '_product_brand.brandName', "Wrong Order by Alias! Expecting '_product_brand.brandName' but returned #collectionConfigStruct.orderBy[1]['propertyIdentifier']#");
+	}
+
+	/**
+	* @test
+	*/
 	public void function addDisplayAggregateCOUNTTest(){
-		var myCollection = variables.entityService.getSkuCollectionList();
-		myCollection.addFilter('skuID','402828904e79c0a5014e8dc3016c060a,402828904e79c0a5014e8dc30190060c','IN');
-		myCollection.addDisplayAggregate('product','count','productCountTotal');
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					skuCode= createUUID()
+				}
+			]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addDisplayAggregate('skus','count','skuCount');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
 
 		var pageRecords = myCollection.getPageRecords();
-		assertEquals(2,pageRecords[1]['productCountTotal']);
+		assertTrue(pageRecords[1]['skuCount'] == 2);
+	}
+	
 
-		myCollection = variables.entityService.getContentCollectionList();
-		myCollection.setDisplayProperties('site.siteName,title');
-		myCollection.addFilter('parentContent','NULL','IS');
-		myCollection.addDisplayAggregate('childContents','count','childContentsCountTotal');
+	/**
+	* @test
+	*/
+	public void function addDisplayAggregateSUMTest(){
+		var uniqueNumberForDescription = createUUID();
 
-		pageRecords = myCollection.getPageRecords();
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				}
+			]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
 
-	}*/
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addDisplayAggregate('skus.price','SUM','skuPriceSum');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+
+		var pageRecords = myCollection.getPageRecords();
+		assertTrue(pageRecords[1]['skuPriceSum'] == '60');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addDisplayAggregateAVGTest(){
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				}
+			]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addDisplayAggregate('skus.price','AVG','skuPriceAvg');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+
+		var pageRecords = myCollection.getPageRecords();
+		assertTrue(pageRecords[1]['skuPriceAvg'] == '20');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addDisplayAggregateMINTest(){
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				}
+			]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addDisplayAggregate('skus.price','MIN','skuPriceMin');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+
+		var pageRecords = myCollection.getPageRecords();
+		assertTrue(pageRecords[1]['skuPriceMin'] == '10');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addDisplayAggregateMAXTest(){
+		var uniqueNumberForDescription = createUUID();
+
+		var productWithSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+			{
+				skuID = '',
+				price = '10',
+				skuCode= createUUID()
+			},
+			{
+				skuID = '',
+				price = '20',
+				skuCode= createUUID()
+			},
+			{
+				skuID = '',
+				price = '30',
+				skuCode= createUUID()
+			}
+				]
+		};
+		var productWithSkus = createPersistedTestEntity('product', productWithSkusData);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addDisplayAggregate('skus.price','MAX','skuPriceMax');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+
+		var pageRecords = myCollection.getPageRecords();
+		assertTrue(pageRecords[1]['skuPriceMax'] == '30');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addFilterSUMAggregateTest(){
+
+	var uniqueNumberForDescription = createUUID();
 
 
+	var productWithSkusData1 = {
+		productID = '',
+		productName = 'ProductUnitTest1',
+		productDescription = uniqueNumberForDescription,
+		skus = [
+		{
+			skuID = '',
+			price = '10',
+			skuCode= createUUID()
+		},
+		{
+			skuID = '',
+			price = '20',
+			skuCode= createUUID()
+		}
+			]
+	};
+	createPersistedTestEntity('product', productWithSkusData1);
 
-//
-//	public void function loopOverCollectionTest(){
-//		var myCollection = variables.entityService.getProductCollectionList();
-//
-//		myCollection.addFilter('productCode','tester444');
-//		myCollection.setDisplayProperties('productName,productCode,activeFlag');
-//
-//		myCollection.setOrderBy('activeFlag|desc,productCode|asc');
-//		var pageRecords = myCollection.getPageRecords();
-//		addToDebug(pageRecords);
-//	}
+
+	var productWithSkusData2 = {
+		productID = '',
+		productName = 'ProductUnitTest2',
+		productDescription = uniqueNumberForDescription,
+		skus = [
+		{
+			skuID = '',
+			price = '10',
+			skuCode= createUUID()
+		},
+		{
+			skuID = '',
+			price = '20',
+			skuCode= createUUID()
+		},
+		{
+			skuID = '',
+			price = '30',
+			skuCode= createUUID()
+		},
+		{
+			skuID = '',
+			price = '40',
+			skuCode= createUUID()
+		}
+			]
+	};
+
+	createPersistedTestEntity('product', productWithSkusData2);
+
+	var myProductCollection = variables.entityService.getProductCollectionList();
+	myProductCollection.setDisplayProperties('productName');
+	myProductCollection.addFilter('skus.price','30', '=', 'AND', 'SUM');
+	myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+	var pageRecords = myProductCollection.getPageRecords();
+
+	assert(arraylen(pageRecords) == 1 && pageRecords[1]['productName'] == 'ProductUnitTest1');
+}
+
+	/**
+	* @test
+	*/
+	public void function addFilterAVGAggregateTest(){
+
+		var uniqueNumberForDescription = createUUID();
 
 
+		var productWithSkusData1 = {
+			productID = '',
+			productName = 'ProductUnitTest1',
+			productCode = 'ProductUnitTest'&createUUID(),
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+		createPersistedTestEntity('product', productWithSkusData1);
 
+
+		var productWithSkusData2 = {
+			productID = '',
+			productName = 'ProductUnitTest2',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '40',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		createPersistedTestEntity('product', productWithSkusData2);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName');
+		myProductCollection.addFilter('skus.price','25', '=', 'AND', 'AVG');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+		assert(arraylen(pageRecords) == 1 && pageRecords[1]['productName'] == 'ProductUnitTest2');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addFilterMINAggregateTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+
+		var productWithSkusData1 = {
+			productID = '',
+			productName = 'ProductUnitTest1',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+		createPersistedTestEntity('product', productWithSkusData1);
+
+
+		var productWithSkusData2 = {
+			productID = '',
+			productName = 'ProductUnitTest2',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '5',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '15',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		createPersistedTestEntity('product', productWithSkusData2);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName');
+		myProductCollection.addFilter('skus.price','5', '=', 'AND', 'MIN');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+		assert(arraylen(pageRecords) == 1 && pageRecords[1]['productName'] == 'ProductUnitTest2');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addFilterMAXAggregateTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+
+		var productWithSkusData1 = {
+			productID = '',
+			productName = 'ProductUnitTest1',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+		createPersistedTestEntity('product', productWithSkusData1);
+
+
+		var productWithSkusData2 = {
+			productID = '',
+			productName = 'ProductUnitTest2',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '5',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '15',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		createPersistedTestEntity('product', productWithSkusData2);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName');
+		myProductCollection.addFilter('skus.price','20', '=', 'AND', 'MAX');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+		assert(arraylen(pageRecords) == 1 && pageRecords[1]['productName'] == 'ProductUnitTest1');
+	}
+
+	/**
+	* @test
+	*/
+	public void function addFilterCOUNTAggregateTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+
+		var productWithSkusData1 = {
+			productID = '',
+			productName = 'ProductUnitTest1',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+		createPersistedTestEntity('product', productWithSkusData1);
+
+
+		var productWithSkusData2 = {
+			productID = '',
+			productName = 'ProductUnitTest2',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '40',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		createPersistedTestEntity('product', productWithSkusData2);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName');
+		myProductCollection.addFilter('skus','4', '=', 'AND', 'COUNT');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+
+		assert(arraylen(pageRecords) == 1 && pageRecords[1]['productName'] == 'ProductUnitTest2');
+	}
+
+	/**
+	* @test
+	*/
+	public void function getPropertyIdentifierAliasTest(){
+		var propertyIdentifier = 'productName';
+		
+		var collectionData = {
+			collectionID="",
+			collectionObject='Product'
+		};
+		var collectionEntity = createPersistedTestEntity('collection',collectionData);
+		assertEquals(collectionEntity.getPropertyIdentifierAlias(propertyIdentifier),'_product.productName');
+		assertEquals(collectionEntity.getPropertyIdentifierAlias('brand.brandName'),'_product_brand.brandName');
+		assertEquals(collectionEntity.getPropertyIdentifierAlias('skus'),'_product_skus');
+	}
+
+	/**
+	* @test
+	*/
 	public void function getAggregateHQLTest(){
 		makePublic(variables.entity,"getAggregateHQL");
-		var propertyIdentifier = "Account.firstName";
-		var aggregate = {
-			aggregateFunction = "count",
-			aggregateAlias = "Account_firstName"
+		var column={
+			propertyIdentifier = "firstName",
+			aggregate = {
+				aggregateFunction = "count",
+				aggregateAlias = "Account_firstName"
+			}
 		};
+		
 		//addToDebug(lcase(replace(createUUID(),'-','')));
-		var aggregateHQL = variables.entity.getAggregateHQL(aggregate,propertyIdentifier);
+		var aggregateHQL = variables.entity.getAggregateHQL(column);
 		//addToDebug(aggregateHQL);
-		assertFalse(Compare("COUNT(DISTINCT Account.firstName) as Account_firstName",trim(aggregateHQL)));
+		assertFalse(Compare("COUNT( firstName) as Account_firstName",trim(aggregateHQL)));
+	}
+	
+	/**
+	* @test
+	*/
+	
+	public void function getAggregateHQLTest_hasObject(){
+		makePublic(variables.entity,"getAggregateHQL");
+		var column={
+			propertyIdentifier = "accountAuthentications",
+			aggregate = {
+				aggregateFunction = "count",
+				aggregateAlias = "Account_accountAuthentications"
+			}
+		};
+		
+		//addToDebug(lcase(replace(createUUID(),'-','')));
+		var aggregateHQL = variables.entity.getAggregateHQL(column);
+		debug(aggregateHQL);
+		//addToDebug(aggregateHQL);
+		assertFalse(Compare("COUNT(DISTINCT accountAuthentications) as Account_accountAuthentications",trim(aggregateHQL)));
 	}
 
+	/**
+	* @test
+	*/
 	public void function addHQLParamTest(){
 		var collectionEntityData = {
 			collectionid = '',
@@ -223,6 +1439,204 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		assertEquals(HQLParams['testKey'],'testValue');
 	}
 
+	/**
+	* @test
+	*/
+	public void function exactDateFilter(){
+
+		var uniqueNumberForDescription = createUUID();
+
+		var productData1 = {
+			productID = '',
+			productName = 'dProduct',
+			purchaseStartDateTime = DateAdd('d', -10, now()),
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData1);
+
+		var productData2 = {
+			productID = '',
+			productName = 'cProduct',
+			purchaseStartDateTime = DateAdd('d', -10, now()),
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+		var productData3 = {
+			productID = '',
+			productName = 'bProduct',
+			purchaseStartDateTime = DateAdd('d', -10, now()),
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData3);
+
+		var productData4 = {
+			productID = '',
+			productName = 'aProduct',
+			purchaseStartDateTime = DateAdd('d', -10, now()),
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData4);
+
+		var collectionEntityData = {
+			collectionid = '',
+			collectionCode = 'exactDateProducts'&createUUID(),
+			collectionName = 'exactDateProducts'&createUUID(),
+			collectionObject = "SlatwallProduct",
+			collectionConfig = '
+				{
+				   "baseEntityAlias":"_product",
+				   "baseEntityName":"Product",
+				   "columns":[
+				      {
+				         "isDeletable":false,
+				         "isExportable":true,
+				         "propertyIdentifier":"_product.productID",
+				         "ormtype":"id",
+				         "isVisible":false,
+				         "isSearchable":true,
+				         "title":"Product ID",
+				         "key":"productID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      }
+				   ],
+				   "filterGroups":[
+				      {
+				         "filterGroup":[
+				            {
+				               "displayPropertyIdentifier":"Purchase Start Date Time",
+				               "propertyIdentifier":"_product.purchaseStartDateTime",
+				               "comparisonOperator":"between",
+				               "breadCrumbs":[
+				                  {
+				                     "rbKey":"Product",
+				                     "entityAlias":"_product",
+				                     "cfc":"_product",
+				                     "propertyIdentifier":"_product"
+				                  }
+				               ],
+				               "measureType":"d",
+				               "measureCriteria":"exactDate",
+				               "criteriaNumberOf":"10",
+				               "value":"10",
+				               "displayValue":"10 Days Ago",
+				               "ormtype":"timestamp",
+				               "conditionDisplay":"Exact N Day(s) Ago"
+				            },
+				            {
+				               "displayPropertyIdentifier":"Product Description",
+				               "propertyIdentifier":"_product.productDescription",
+				               "comparisonOperator":"=",
+				               "logicalOperator":"AND",
+				               "breadCrumbs":[
+				                  {
+				                     "rbKey":"Product",
+				                     "entityAlias":"_product",
+				                     "cfc":"_product",
+				                     "propertyIdentifier":"_product"
+				                  }
+				               ],
+				               "value":"#uniqueNumberForDescription#",
+				               "displayValue":"#uniqueNumberForDescription#",
+				               "ormtype":"string",
+				               "conditionDisplay":"Equals"
+				            }
+				         ]
+				      }
+				   ],
+				   "currentPage":1,
+				   "pageShow":10
+				}
+			'
+		};
+		var collectionEntity = createPersistedTestEntity('collection',collectionEntityData);
+		var pageRecords = collectionEntity.getPageRecords();
+
+		assertTrue(arraylen(pageRecords) == 4,  "Wrong amount of products returned! Expecting 4 records but returned #arrayLen(pageRecords)#");
+
+
+	}
+
+	/**
+	* @test
+	*/
+
+	public void function mergeParentCollectionFiltersTest(){
+
+
+		var uniqueSkuName = createUUID();
+
+		//Active product with 4 active skuls
+		var productWithActiveSkusData = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			skus = [
+				{
+					skuID = '',
+					skuName = uniqueSkuName,
+					skuCode = createUUID(),
+					activeFlag = true
+				},
+				{
+					skuID = '',
+					skuName = uniqueSkuName,
+					skuCode = createUUID(),
+					activeFlag = true
+				},
+				{
+					skuID = '',
+					skuName = uniqueSkuName,
+					skuCode = createUUID(),
+					activeFlag = true
+				},
+				{
+					skuID = '',
+					skuName = uniqueSkuName,
+					skuCode = createUUID(),
+					activeFlag = false
+				},
+				{
+					skuID = '',
+					skuName = 'Other Name',
+					skuCode = createUUID(),
+					activeFlag = false
+				}
+			]
+		};
+
+		var productWithActiveSkus = createPersistedTestEntity('product', productWithActiveSkusData);
+
+		//Create Parent Colleciton
+
+		var mySkuParentCollection = variables.entityService.getSkuCollectionList();
+		mySkuParentCollection.setDisplayProperties('skuID,skuName,skuCode,activeFlag');
+		mySkuParentCollection.addFilter('skuName',uniqueSkuName);
+		var pageRecords = mySkuParentCollection.getPageRecords();
+
+		assertTrue(arrayLen(pageRecords) == 4, "Wrong amount of products returned! Expecting 4 records but returned #arrayLen(pageRecords)#");
+
+		persistTestEntity(mySkuParentCollection, {});
+
+
+
+		//Create New collection
+		var mySkuCollection = variables.entityService.getSkuCollectionList();
+
+		mySkuCollection.setParentCollection(mySkuParentCollection);
+		mySkuCollection.setDisplayProperties('skuID,skuName,skuCode,activeFlag');
+		mySkuCollection.addFilter('activeFlag',false);
+		var pageRecords = mySkuCollection.getPageRecords();
+		assertTrue(arrayLen(pageRecords) == 1, "Wrong amount of products returned! Expecting 1 record but returned #arrayLen(pageRecords)#");
+
+	}
+
+	/**
+	* @test
+	*/
 	public void function addHQLParamsFromNestedCollectionTest(){
 
 		var collectionEntityData = {
@@ -260,52 +1674,332 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		assertEquals(4,structCount(collectionEntity2.getHQLParams()));
 	}
 
+    /**
+    * @test
+    **/
 
-	/* TODO:write complete test data to verify getRecords and getRecordsCount methods*/
-	/*
+    public void function removeJoinsNotInUseTest(){
+        var collectionEntityData2 = {
+            collectionid = '',
+            collectionCode = 'AccountOrders',
+            baseEntityName = 'SlatwallAccount',
+            collectionConfig = '
+				{
+					"baseEntityName":"SlatwallAccount",
+					"baseEntityAlias":"_account",
+					"columns":[
+						{
+							"propertyIdentifier":"_account.firstName"
+						},
+						{
+							"propertyIdentifier":"_account.lastName"
+						},
+						{
+							"propertyIdentifier":"_account_primaryEmailAddress.emailAddress"
+						}
+					],
+					"joins":[
+						{
+							"associationName":"orders",
+							"alias":"_account_orders"
+						},
+						{
+							"associationName":"primaryEmailAddress",
+							"alias":"_account_primaryEmailAddress"
+						}
+					],
+					"orderBy":[
+						{
+							"propertyIdentifier":"_account.lastName",
+							"direction":"DESC"
+						},
+						{
+							"propertyIdentifier":"_account.firstName",
+							"direction":"DESC"
+						}
+					],
+					"groupBy":[
+						{
+							"propertyIdentifier":"accountID"
+						}
+					],
+					"filterGroups":[
+						{
+							"filterGroup":[
+								{
+									"propertyIdentifier":"_account.firstName",
+									"comparisonOperator":"=",
+									"value":"Miguel"
+								},
+								{
+									"logicalOperator":"AND",
+									"propertyIdentifier":"_account.LastName",
+									"comparisonOperator":"=",
+									"value":"Targa"
+								},
+								{
+									"logicalOperator":"AND",
+									"filterGroup":[
+										{
+											"propertyIdentifier":"_account.superUserFlag",
+											"comparisonOperator":"=",
+											"value":"true"
+										},
+										{
+											"logicalOperator":"OR",
+											"propertyIdentifier":"_account.superUserFlag",
+											"comparisonOperator":"=",
+											"value":"false"
+										},
+										{
+											"logicalOperator":"AND",
+											"filterGroup":[
+												{
+													"propertyIdentifier":"_account_primaryEmailAddress.emailAddress",
+													"comparisonOperator":"=",
+													"value":"miguel.targa@ten24web.com"
+												},
+												{
+													"logicalOperator":"OR",
+													"propertyIdentifier":"_account_primaryEmailAddress.emailAddress",
+													"comparisonOperator":"=",
+													"value":"miguel@targa.me"
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+
+				}
+			'
+        };
+        var collectionEntity2 = createTestEntity('collection',collectionEntityData2);
+        var joinsHQL = trim(collectionEntity2.getJoinHQL());
+
+        assert(joinsHQL == "left join _account.primaryEmailAddress as _account_primaryEmailAddress", 'Bad Join HQL: "#joinsHQL#", expected: "left join _account.primaryEmailAddress as _account_primaryEmailAddress"');
+    }
+
+	/**
+	* @test
+	*/
 	public void function getRecordsCountTest(){
-		var collectionEntityData = {
-			collectionid = '',
-			collectionCode = 'RyansAccountOrders',
-			collectionName = 'RyansAccountOrders',
-			collectionConfig = '{
-				"baseEntityName":"SlatwallAccount",
-				"baseEntityAlias":"Account"
-			}
-			',
-			baseEntityName = "SlatwallAccount"
+		var uniqueNumberForDescription = createUUID();
 
+		var productData1 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
 		};
-		var collectionEntity = createPersistedTestEntity('collection',collectionEntityData);
+		createPersistedTestEntity('product', productData1);
 
-		var recordsCount = collectionEntity.getRecordsCount();
+		var productData2 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
 
-		//addToDebug(recordsCount);
-		//addToDebug(collectionEntity.getHQL());
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.setOrderBy('productName|asc');
+
+		var recordsCount = myCollection.getRecordsCount();
+
+		assertTrue(recordsCount == 2,  "Wrong amount of products returned! Expecting 2 records but returned #recordsCount#");
 
 	}
 
-	public void function getRecords(){
-		var collectionEntityData = {
-			collectionid = '',
-			collectionCode = 'RyansAccountOrders',
-			collectionName = 'RyansAccountOrders',
-			collectionConfig = '{
-				"baseEntityName":"SlatwallAccount",
-					"baseEntityAlias":"Account"
-			}
-			',
-			baseEntityName = "SlatwallAccount"
+	/**
+	* @test
+	*/
+	public void function getRecordsCountWithGroupByTest(){
+		var uniqueNumberForDescription = createUUID();
 
+		var productData1 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
 		};
-		var collectionEntity = createPersistedTestEntity('collection',collectionEntityData);
+		createPersistedTestEntity('product', productData1);
 
-		var records = collectionEntity.getRecords();
+		var productData2 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.addGroupBy('productName');
+		myCollection.setOrderBy('productName|asc');
+
+		var recordsCount = myCollection.getRecordsCount();
+
+		assertTrue(recordsCount == 1,  "Wrong amount of products returned! Expecting 1 record but returned #recordsCount#");
+
+	}
+
+	/**
+	* @test
+	*/
+	public void function getRecordsCountWithGroupBy2Test(){
+		var uniqueNumberForDescription = createUUID();
+
+		var productData1 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData1);
+
+		var productData2 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productID,productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.addGroupBy('productID,productName');
+		myCollection.setOrderBy('productName|asc');
+
+		var recordsCount = myCollection.getRecordsCount();
+
+		assertTrue(recordsCount == 2,  "Wrong amount of products returned! Expecting 2 record but returned #recordsCount#");
+
+	}
+
+	/**
+	* @test
+	*/
+	public void function getRecordsCountWithAggregateTest(){
+
+		var uniqueNumberForDescription = createUUID();
+
+
+		var productWithSkusData1 = {
+			productID = '',
+			productName = 'ProductUnitTest1',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+			{
+				skuID = '',
+				price = '10',
+				skuCode= createUUID()
+			},
+			{
+				skuID = '',
+				price = '20',
+				skuCode= createUUID()
+			}
+				]
+		};
+		createPersistedTestEntity('product', productWithSkusData1);
+
+
+		var productWithSkusData2 = {
+			productID = '',
+			productName = 'ProductUnitTest2',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '30',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '40',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		var productWithSkusData3 = {
+			productID = '',
+			productName = 'ProductUnitTest3',
+			productDescription = uniqueNumberForDescription,
+			skus = [
+				{
+					skuID = '',
+					price = '10',
+					skuCode= createUUID()
+				},
+				{
+					skuID = '',
+					price = '20',
+					skuCode= createUUID()
+				}
+			]
+		};
+
+		createPersistedTestEntity('product', productWithSkusData3);
+
+		var myProductCollection = variables.entityService.getProductCollectionList();
+		myProductCollection.setDisplayProperties('productName');
+		myProductCollection.addFilter('skus.price','20', '=', 'AND', 'MAX');
+		myProductCollection.addFilter('productDescription',uniqueNumberForDescription);
+		var pageRecords = myProductCollection.getPageRecords();
+		var recordsCount = myProductCollection.getRecordsCount();
+
+		assert(recordsCount == 2, "Wrong amount of products returned! Expecting 2 records but returned #recordsCount#");
+	}
+
+	/**
+	* @test
+	*/
+	public void function getRecordsTest(){
+		var uniqueNumberForDescription = createUUID();
+
+		var productData1 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData1);
+
+		var productData2 = {
+			productID = '',
+			productName = 'ProductUnitTest',
+			productDescription = uniqueNumberForDescription
+		};
+		createPersistedTestEntity('product', productData2);
+
+
+		var myCollection = variables.entityService.getProductCollectionList();
+		myCollection.setDisplayProperties('productName');
+		myCollection.addFilter('productDescription',uniqueNumberForDescription);
+		myCollection.setOrderBy('productName|asc');
+
+		var pageRecords = myCollection.getRecords();
+
+		assertTrue(arraylen(pageRecords) == 2,  "Wrong amount of products returned! Expecting 2 records but returned #arrayLen(pageRecords)#");
 
 		//addToDebug(records);
 	}
-	*/
 
+	/**
+	* @test
+	*/
 	public void function deserializeCollectionConfigTest(){
 		makePublic(variables.entity,'deserializeCollectionConfig');
 		var collectionEntityData = {
@@ -364,7 +2058,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		assertTrue(isStruct(deserializedCollectionConfig));
 	}
 
-
+	/**
+	* @test
+	*/
 	public void function getHQLFilteringWithOtherCollectionTest(){
 		var collectionEntityData = {
 			collectionid = '',
@@ -474,6 +2170,7 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var testquery = ORMExecuteQuery(collectionEntityHQL,collectionEntity.gethqlParams());
 
 	}
+
 	/* TODO: need default data for the pagination record to be correct*/
 	/*public void function getPageRecordsTest(){
 		var collectionBestAcountEmailAddressesData = {
@@ -501,10 +2198,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(pageRecords);
 	}*/
 
-	public void function validate_as_save_for_a_new_instance_doesnt_pass(){
-
-	}
-
+	/**
+	* @test
+	*/
 	public void function getHQLNestedFilterTest(){
 
 		var collectionEntityData = {
@@ -635,6 +2331,7 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//var query = ORMExecuteQuery(collectionEntityHQL,collectionEntity.gethqlParams());
 
 	}
+
 	/*
 	public any function getProductSmartList(struct data={}, currentURL="") {
 		arguments.entityName = "SlatwallProduct";
@@ -653,41 +2350,17 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 		return smartList;
 	}*/
-	public void function productSmartList_test(){
-		var productCollection = variables.entity;
-		productCollection.setCollectionObject('Product');
-		var collectionConfig = {
-			baseEntityName='SlatwallProduct',
-			baseEntityAlias="_product",
-			columns=[
-				{
-					propertyIdentifier="_product.productID"
-				},
-				{
-					propertyIdentifier="_product.productName"
-				}
-			],
-			"filterGroups":[
-			      {
-			         "filterGroup":[
-						{
-							propertyIdentifier="_product.productID",
-							comparisonOperator="=",
-							value="4028288d4cb859ba014cbebd46470210"
-						}
-					]
-				}
-			]
-		};
-		productCollection.setCollectionConfig(serializeJson(collectionConfig));
 
 
-	}
 
-	public void function getHQLTest_date_in_range(){
+	/**
+	* @test
+	*/
+	public void function getHQLTest_date_in_range_epoch(){
 		var collectionData = {
 			collectionid = '',
-			collectionName='dateInRange',
+			collectionName='dateInRangeEpoch',
+			collectionObject = 'SlatwallAccount',
 			collectionConfig = '
 				{
 				   "baseEntityName":"SlatwallAccount",
@@ -913,20 +2586,261 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 				}
 			'
 		};
-		var collectionEntity = createPersistedTestEntity('collection',collectionData);
-		//addToDebug(collectionEntity.getPageRecords());
+		var collectionEntity = createPersistedTestEntity('Collection',collectionData);
+		assert(REFind('_account\.createdDateTime BETWEEN :P[a-f0-9]{32} AND :P[a-f0-9]{32}', collectionEntity.getHQL()) > 0);
 	}
-
+	
+	/**
+	* @test
+	*/
+	public void function getHQLTest_date_in_range_gregorian(){
+		var collectionData = {
+			collectionid = '',
+			collectionName='dateInRangeGregorian',
+			collectionObject = 'SlatwallAccount',
+			collectionConfig = '
+				{
+				   "baseEntityName":"SlatwallAccount",
+				   "baseEntityAlias":"_account",
+				   "columns":[
+				      {
+				         "isDeletable":false,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.accountID",
+				         "ormtype":"id",
+				         "isVisible":false,
+				         "isSearchable":true,
+				         "title":"accountID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.superUserFlag",
+				         "ormtype":"boolean",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Super User",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.firstName",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"First Name",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.lastName",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Last Name",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.company",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Company",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.loginLockExpiresDateTime",
+				         "ormtype":"timestamp",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Account Locked",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.failedLoginAttemptCount",
+				         "ormtype":"integer",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Failed Login Attempts",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.cmsAccountID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"CMS Account ID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.remoteEmployeeID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Remote Employee ID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.remoteCustomerID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Remote Customer ID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.remoteContactID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Remote Contact ID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.createdByAccountID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Created By AccountID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "isDeletable":true,
+				         "isExportable":true,
+				         "propertyIdentifier":"_account.modifiedByAccountID",
+				         "ormtype":"string",
+				         "isVisible":true,
+				         "isSearchable":true,
+				         "title":"Modified By AccountID",
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      },
+				      {
+				         "title":"Created Date Time",
+				         "propertyIdentifier":"_account.createdDateTime",
+				         "isVisible":true,
+				         "isDeletable":true,
+				         "sorting":{
+				            "active":false,
+				            "sortOrder":"asc",
+				            "priority":0
+				         }
+				      }
+				   ],
+				   "filterGroups":[
+				      {
+				         "filterGroup":[
+				            {
+				               "displayPropertyIdentifier":"Created Date Time",
+				               "propertyIdentifier":"_account.createdDateTime",
+				               "comparisonOperator":"between",
+				               "breadCrumbs":[
+				                  {
+				                     "rbKey":"Account",
+				                     "entityAlias":"_account",
+				                     "cfc":"_account",
+				                     "propertyIdentifier":"_account"
+				                  }
+				               ],
+				               "value":"1/1/2015-1/1/2017",
+				               "displayValue":"01/01/2015 - 01/01/2017 ",
+				               "ormtype":"timestamp",
+				               "conditionDisplay":"In Range"
+				            }
+				         ]
+				      }
+				   ]
+				}
+			'
+		};
+		var collectionEntity = createPersistedTestEntity('Collection',collectionData);
+		assert(REFind('_account\.createdDateTime BETWEEN :P[a-f0-9]{32} AND :P[a-f0-9]{32}', collectionEntity.getHQL()) > 0);
+		//addToDebug("HQL: #collectionEntity.getHQL()#");
+	}
+	
+	/**
+	* @test
+	*/
 	public void function getHQLTest_Contains(){
 		var collectionBestAcountEmailAddressesData = {
 			collectionid = '',
-			collectionCode = 'BestAccountEmailAddresses',
+			collectionCode = 'BestAccountEmailAddresses'&createUUID(),
 			collectionObject="Account",
 			collectionConfig = '
 				{
 					"baseEntityName":"SlatwallAccount",
 					"baseEntityAlias":"Account",
-					"columns":[{"propertyIdentifier":"Account.accountID"},{"propertyIdentifier":"Account.superUserFlag"},{"propertyIdentifier":"Account.firstName"},{"propertyIdentifier":"Account.lastName"},{"propertyIdentifier":"Account.company"},{"propertyIdentifier":"Account.cmsAccountID"},{"propertyIdentifier":"Account.remoteEmployeeID"},{"propertyIdentifier":"Account.remoteCustomerID"},{"propertyIdentifier":"Account.remoteContactID"},{"propertyIdentifier":"Account.createdByAccountID"},{"propertyIdentifier":"Account.modifiedByAccountID"}]
+					"columns":[{"propertyIdentifier":"Account.accountID"},{"propertyIdentifier":"Account.superUserFlag"},{"propertyIdentifier":"Account.firstName"},{"propertyIdentifier":"Account.lastName"},{"propertyIdentifier":"Account.company"},{"propertyIdentifier":"Account.cmsAccountID"},{"propertyIdentifier":"Account.remoteEmployeeID"},{"propertyIdentifier":"Account.remoteCustomerID"},{"propertyIdentifier":"Account.remoteContactID"},{"propertyIdentifier":"Account.createdByAccountID"},{"propertyIdentifier":"Account.modifiedByAccountID"}],
 
 					"filterGroups":[
 						{
@@ -949,10 +2863,13 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(collectionBestAcountEmailAddresses.getPageRecords());
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_dateFilter(){
 		var collectionBestAcountEmailAddressesData = {
 		collectionid = '',
-		collectionCode = 'BestAccountEmailAddresses',
+		collectionCode = 'BestAccountEmailAddresses'&createUUID(),
 		baseEntityName="Account",
 		collectionConfig = '{
 			  "baseEntityName": "SlatwallAccount",
@@ -993,6 +2910,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var items = ormExecuteQUery("FROM SlatwallAccount as Account where ( Account.superUserFlag = true OR Account.firstName = 'Ryan' AND Account.createdDateTime BETWEEN 1407556800000 AND 1407643199999 )");
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest(){
 		/*var collectionBestAcountEmailAddressesData = {
 			collectionid = '',
@@ -1054,6 +2974,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_exists_in_collection(){
 
 
@@ -1084,6 +3007,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_list(){
 
 
@@ -1112,6 +3038,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_keywords_with_filterGroup(){
 
 		//acount data
@@ -1175,6 +3104,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(collectionEntity.getRecords());
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_keywords_without_filterGroup(){
 
 		//acount data
@@ -1218,6 +3150,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(collectionEntity.getHQL());
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_keywords_without_defaultColumns(){
 
 		//acount data
@@ -1242,6 +3177,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(collectionEntity.getHQL());
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_keywords_without_ormtype(){
 
 		//acount data
@@ -1283,7 +3221,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(collectionEntity.getHQL());
 	}
 
-
+	/**
+	* @test
+	*/
 	public void function getHQLTest_notpersistent(){
 
 		var collectionEntityData = {
@@ -1343,6 +3283,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(collectionEntity.getPageRecords());
 	}
 
+	/**
+	* @test
+	*/
 	public void function hasNonPersistentColumn(){
 
 		var collectionEntityData = {
@@ -1395,10 +3338,29 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(collectionEntity.getNonPersistentColumn());
 	}
 
+	/**
+	* @test
+	*/
+	public void function removeFilterTest(){
+		var accountCollectionList = variables.entityService.getCollectionList('Account');
+		accountCollectionList.addFilter('accountID','test');
+		accountCollectionList.addFilter('accountID','tester','=','OR');
+		accountCollectionList.addFilter('accountID','testee','=','AND');
+		
+		accountCollectionList.removeFilter(propertyIdentifier='accountID',value='testee');
+		assert(arrayLen(accountCollectionList.getCollectionConfigStruct().filterGroups[1].filterGroup)==2);
+		assert(accountCollectionList.getCollectionConfigStruct().filterGroups[1].filterGroup[1].value == 'test');
+		assert(accountCollectionList.getCollectionConfigStruct().filterGroups[1].filterGroup[2].value == 'tester');
+
+	}
+	
+	/**
+	* @test
+	*/
 	public void function getHQLTest_emptyFilterGroup(){
 		var collectionBestAcountEmailAddressesData = {
 			collectionid = '',
-			collectionCode = 'BestAccountEmailAddresses',
+			collectionCode = 'BestAccountEmailAddresses'&createUUID(),
 			baseEntityName="AccountEmailAddress",
 			collectionConfig = '
 				 {
@@ -1442,6 +3404,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLTest_joins(){
 
 		var collectionEntityData = {
@@ -1474,6 +3439,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getSelectionsHQLTest(){
 		MakePublic(variables.entity,'getSelectionsHQL');
 		var selectionsJSON = '	[
@@ -1493,6 +3461,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 
 	}
 
+	/**
+	* @test
+	*/
 	public void function getFilterHQLTest(){
 		MakePublic(variables.entity,'getFilterHQL');
 		var filterGroupsJSON = '	[
@@ -1535,8 +3506,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(filterHQL);
 	}
 
-
-
+	/**
+	* @test
+	*/
 	public void function getFilterGroupHQLTest(){
 		MakePublic(variables.entity,'getFilterGroupHQL');
 		var filterGroupJSON = '	[
@@ -1590,6 +3562,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var filterGroupHQL = variables.entity.getFilterGroupHQL(filterGroup);
 	}
 
+	/**
+	* @test
+	*/
 	public void function getFilterGroupsHQLTest(){
 		MakePublic(variables.entity,'getFilterGroupsHQL');
 		var filterGroupsJSON = '	[
@@ -1615,32 +3590,36 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var filterGroupsHQL = variables.entity.getFilterGroupsHQL(filterGroups);
 	}
 
+	/**
+	* @test
+	*/
 	public void function getOrderByHQLTest(){
 		makePublic(variables.entity,"getOrderByHQL");
 		var orderBy = [
 			{
-				propertyIdentifier="Account.lastName",
+				propertyIdentifier="_account.lastName",
 				direction="DESC"
 			},
 			{
-				propertyIdentifier="Account.company",
+				propertyIdentifier="_account.company",
 				direction="DESC"
 			},
 			{
-				propertyIdentifier="Account.firstName",
+				propertyIdentifier="_account.firstName",
 				direction="ASC"
 			}
 		];
 
 		var orderByHQL = variables.entity.getOrderByHQL(orderBy);
 		//not truly false, using Compare to test case-sensitive strings 1 is greater, 0 is equal, -1 is less than. Coldfusion saying 0 is equal, i know awesome! :)
-		assertFalse(Compare(" ORDER BY Account.lastName DESC ,Account.company DESC ,Account.firstName ASC ",orderByHQL));
+		assertFalse(Compare(" ORDER BY _account.lastName DESC ,_account.company DESC ,_account.firstName ASC ",orderByHQL));
 
 		//addToDebug(orderByHQL);
 	}
 
-
-
+	/**
+	* @test
+	*/
 	public void function addJoinHQLTest(){
 		makePublic(variables.entity,'addJoinHQL');
 		var joinJSON = '
@@ -1731,6 +3710,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(collectionEntity.getHQL());
 	}*/
 
+	/**
+	* @test
+	*/
 	public void function HQLTestJoins(){
 
 		var CollectionEntityData = {
@@ -1765,6 +3747,10 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var collectionEntity = createPersistedTestEntity('collection',CollectionEntityData);
 		//addToDebug(collectionEntity.getPageRecords());
 	}
+
+	/**
+	* @test
+	*/
 	public void function getHQLWithSettingTest(){
 		var CollectionEntityData = {
 			collectionid = '',
@@ -1792,6 +3778,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		//addToDebug(collectionEntity.getPageRecords());
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLForCollectionFilterSkuTest(){
 		var collectionBestSkuData = {
 			collectionid = '',
@@ -1824,12 +3813,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(HQL);
 	}
 
-	public void function testest(){
-		var test = ormexecuteQuery("SELECT _orderitem FROM SlatwallOrderItem as _orderitem left join _orderitem.order as _orderitem_order where (_orderitem_order.orderID = 'ff80808151a223aa0151a735438e014a') GROUP BY _orderitem ORDER BY _orderitem.createdDateTime desc",false,{maxresults=1});
- 		addToDebug('test');
-		addToDebug(test);
-	}
-
+	/**
+	* @test
+	*/
 	public void function getHQLForCollectionFilterManyToManyTest(){
 		var collectionPromotionRewardData = {
 			collectionid = '',
@@ -1881,6 +3867,9 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		addToDebug(HQL);
 	}
 
+	/**
+	* @test
+	*/
 	public void function getHQLForCollectionFilterOneToManyTest(){
 
 		var collectionBestAcountEmailAddressesData = {
@@ -1932,6 +3921,43 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		HQL = variables.entity.getHQLForCollectionFilter(filter);
 		addToDebug(HQL);
 	}
+
+	public void function getRecordOptionsTest(){
+		var recordOptions = variables.entity.getRecordOptions();
+		assert(structKeyExists(recordOptions[1],'name') && structKeyExists(recordOptions[1],'value'));
+	}
+
+	public void function getMergeCollectionOptionsTest(){
+		variables.entity.setCollectionID(createUUID());
+
+		var accountCollectionData = {
+			collectionid = createUUID(),
+			collectionName = createUUID(),
+			collectionCode = 'account#createUUID()#',
+			collectionObject="Account",
+			collectionConfig = '
+				{
+					"baseEntityName":"SlatwallAccount",
+					"baseEntityAlias":"_account"
+
+				}
+			'
+		};
+
+		var accountCollection = createPersistedTestEntity('collection',accountCollectionData);
+
+		var mergeCollectionRecords = variables.entity.getMergeCollectionOptions();
+		assert(arrayLen(mergeCollectionRecords));
+		var foundAccountCollection = false;
+		for(var record in mergeCollectionRecords){
+			if(record.name == accountCollectionData.collectionName){
+				foundAccountCollection = true;
+			}
+			assert(record.value != variables.entity.getCollectionID());
+		}
+		assert(foundAccountCollection == true);
+
+	};
 
 	/*public void function getCollectionObjectParentChildTest(){
 		//first a list of collection options is presented to the user
@@ -2120,7 +4146,6 @@ component extends="Slatwall.meta.tests.unit.entity.SlatwallEntityTestBase" {
 		var result = ORMExecuteQuery(collectionEntity.getHQL(),collectionEntity.getHQLParams());
 		//addToDebug(result);
 	}*/
-
 }
 
 /*

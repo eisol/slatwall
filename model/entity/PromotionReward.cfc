@@ -107,7 +107,12 @@ component displayname="Promotion Reward" entityname="SlatwallPromotionReward" ta
 	property name="applicableTermOptions" persistent="false";
 	property name="rewards" type="string" persistent="false";
 	property name="currencyCodeOptions" persistent="false";
+	property name="isDeletableFlag" type="boolean" persistent="false"; 
 	
+	public boolean function getIsDeletableFlag(){
+ 		return getPromotionPeriod().getIsDeletableFlag();
+ 	}
+ 	
 	public string function getSimpleRepresentation() {
 		return "#rbKey('entity.promotionReward')# - #getFormattedValue('rewardType')#";
 	}
@@ -153,7 +158,7 @@ component displayname="Promotion Reward" entityname="SlatwallPromotionReward" ta
 
 
 	public numeric function getAmountByCurrencyCode(required string currencyCode){
-		if(arguments.currencyCode neq getCurrencyCode()){
+		if(arguments.currencyCode neq getCurrencyCode() and getAmountType() neq 'percentageOff'){
 			//Check for explicity defined promotion reward currencies
 			for(var i=1;i<=arraylen(variables.promotionRewardCurrencies);i++){
 				if(variables.promotionRewardCurrencies[i].getCurrencyCode() eq arguments.currencyCode){
@@ -163,7 +168,7 @@ component displayname="Promotion Reward" entityname="SlatwallPromotionReward" ta
 			//Check for defined conversion rate 
 			var currencyRate = getService("currencyService").getCurrencyDAO().getCurrentCurrencyRateByCurrencyCodes(originalCurrencyCode=getCurrencyCode(), convertToCurrencyCode=arguments.currencyCode, conversionDateTime=now());
 			if(!isNull(currencyRate)) {
-				return precisionEvaluate(currencyRate.getConversionRate()*getAmount());
+				return getService('HibachiUtilityService').precisionCalculate(currencyRate.getConversionRate()*getAmount());
 			}
 		
 		}

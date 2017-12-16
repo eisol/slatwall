@@ -109,8 +109,8 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 							authorizations[a].createdDateTime = thisData.createdDateTime;
 							authorizations[a].providerTransactionID = thisData.providerTransactionID;
 						}
-						authorizations[a].amountAuthorized = precisionEvaluate(authorizations[a].amountAuthorized + thisData.amountAuthorized);
-						authorizations[a].amountReceived = precisionEvaluate(authorizations[a].amountReceived + thisData.amountReceived);
+						authorizations[a].amountAuthorized = val(getService('HibachiUtilityService').precisionCalculate(authorizations[a].amountAuthorized + thisData.amountAuthorized));
+						authorizations[a].amountReceived = val(getService('HibachiUtilityService').precisionCalculate(authorizations[a].amountReceived + thisData.amountReceived));
 						thisDataAdded = true;
 						break;
 					}
@@ -124,7 +124,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 		for(var a=1; a<=arrayLen(authorizations); a++) {
 			if(authorizations[a].amountAuthorized gt authorizations[a].amountReceived) {
 				sortedFound = false;
-				authorizations[a].chargeableAmount = precisionEvaluate(authorizations[a].amountAuthorized - authorizations[a].amountReceived);
+				authorizations[a].chargeableAmount = val(getService('HibachiUtilityService').precisionCalculate(authorizations[a].amountAuthorized - authorizations[a].amountReceived));
 				for(var s=1; s<=arrayLen(sortedAuths); s++) {
 					if(sortedAuths[s].createdDateTime gt authorizations[a].createdDateTime) {
 						arrayInsertAt(sortedAuths, s, authorizations[a]);
@@ -164,7 +164,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 					if(!structKeyExists(paymentMethodMaxAmount, thisPaymentMethodID)) {
 						paymentMethodMaxAmount[thisPaymentMethodID] = arguments.order.getFulfillmentChargeAfterDiscountTotal();
 					}
-					paymentMethodMaxAmount[thisPaymentMethodID] = precisionEvaluate(paymentMethodMaxAmount[thisPaymentMethodID] + (arguments.order.getOrderItems()[i].getExtendedPriceAfterDiscount() + arguments.order.getOrderItems()[i].getTaxAmount()));
+					paymentMethodMaxAmount[thisPaymentMethodID] = val(getService('HibachiUtilityService').precisionCalculate(paymentMethodMaxAmount[thisPaymentMethodID] + (arguments.order.getOrderItems()[i].getExtendedPriceAfterDiscount() + arguments.order.getOrderItems()[i].getTaxAmount())));
 				}
 			}
 
@@ -198,12 +198,18 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 								if(arguments.order.getAccount().getTermAccountAvailableCredit() < maximumAmount) {
 									maximumAmount = arguments.order.getAccount().getTermAccountAvailableCredit();
 								}
-
-								arrayAppend(eligiblePaymentMethodDetails, {paymentMethod=activePaymentMethods[i], maximumAmount=maximumAmount, paymentTerm=paymentTerm});
+								var eligiblePaymentMethod = getTransient('EligiblePaymentMethodBean');
+								eligiblePaymentMethod.setPaymentMethod(activePaymentMethods[i]);
+								eligiblePaymentMethod.setPaymentTerm(paymentTerm);
+								eligiblePaymentMethod.setMaximumAmount(maximumAmount);
+								arrayAppend(eligiblePaymentMethodDetails, eligiblePaymentMethod);
 							}
 						}
 					} else {
-						arrayAppend(eligiblePaymentMethodDetails, {paymentMethod=activePaymentMethods[i], maximumAmount=maximumAmount});
+						var eligiblePaymentMethod = getTransient('EligiblePaymentMethodBean');
+						eligiblePaymentMethod.setPaymentMethod(activePaymentMethods[i]);
+						eligiblePaymentMethod.setMaximumAmount(maximumAmount);
+						arrayAppend(eligiblePaymentMethodDetails, eligiblePaymentMethod);
 					}
 				}
 			}
@@ -293,12 +299,16 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 
 		// Make sure there is an orderPayment or accountPayment
 		if(!isNull(arguments.paymentTransaction.getPayment())) {
-
+			
 			// Lock the session scope to make sure that
 			lock scope="Session" timeout="45" {
-
+				//if this is an accountpayment adjustment then there is no need for an account payment method
 				// Check to make sure this isn't a duplicate transaction
-				var isDuplicateTransaction = getPaymentDAO().isDuplicatePaymentTransaction(paymentID=arguments.paymentTransaction.getPayment().getPrimaryIDValue(), idColumnName=arguments.paymentTransaction.getPayment().getPrimaryIDPropertyName(), paymentType=arguments.paymentTransaction.getPayment().getPaymentMethodType(), transactionType=arguments.data.transactionType, transactionAmount=arguments.data.amount);
+				var isDuplicateTransaction = false;
+				if(!isNull(arguments.paymentTransaction.getPayment().getPaymentMethodType())){
+					var isDuplicateTransaction = getPaymentDAO().isDuplicatePaymentTransaction(paymentID=arguments.paymentTransaction.getPayment().getPrimaryIDValue(), idColumnName=arguments.paymentTransaction.getPayment().getPrimaryIDPropertyName(), paymentType=arguments.paymentTransaction.getPayment().getPaymentMethodType(), transactionType=arguments.data.transactionType, transactionAmount=arguments.data.amount);	
+				}
+				
 
 				// Add the duplicate error to the payment, if this was
 				if(isDuplicateTransaction) {
@@ -320,10 +330,12 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 
 					// ======== CORE PROCESSING ==========
 
-
-
 					// If this isn't a creditOffline or receiveOffline, and an INTEGRATION EXISTS
-					if(!listFindNoCase("creditOffline,receiveOffline", arguments.data.transactionType) && listFindNoCase("creditCard,external", arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentMethodType()) && !isNull(arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentIntegration())) {
+					if(
+						!listFindNoCase("creditOffline,receiveOffline", arguments.data.transactionType) 
+						&& listFindNoCase("creditCard,external", arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentMethodType()) 
+						&& !isNull(arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentIntegration())
+					) {
 
 						// Get the PaymentCFC
 						var integration = arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentIntegration();
@@ -464,10 +476,13 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 						}
 
 					// NO INTEGRATION
+					// This also happens if the payment is an accountpayment and it is an AccountPaymentType of Adjustment
 					} else {
-
 						//GiftCard
-                        if(listFindNoCase("giftCard", arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentMethodType())){
+                        if(
+                        	!isNull(arguments.paymentTransaction.getPayment().getPaymentMethod())
+                        	&& listFindNoCase("giftCard", arguments.paymentTransaction.getPayment().getPaymentMethod().getPaymentMethodType())
+                        ){
                             var giftCard = getService("HibachiService").get("giftCard",  getDAO("giftCardDAO").getIDByCode(arguments.paymentTransaction.getOrderPayment().getGiftCardNumberEncrypted()));
 
 							var amount = arguments.data.amount;
@@ -476,7 +491,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 
                                 var giftCardProcessObject = giftCard.getProcessObject("AddDebit");
 
-                                giftCardProcessObject.setOrderPayments(arguments.paymentTransaction.getOrderPayment().getOrder().getOrderPayments());
+                                giftCardProcessObject.setOrderPayment(arguments.paymentTransaction.getOrderPayment());
                                 giftCardProcessObject.setOrderItems(arguments.paymentTransaction.getOrderPayment().getOrder().getOrderItems());
 
 								if(giftCard.isExpired()){
@@ -519,7 +534,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
                             }
 
                         } else {
-
+		
                             // Setup amountReceived
                             if( listFindNoCase("receive,receiveOffline", arguments.data.transactionType) ) {
                                 arguments.paymentTransaction.setAmountReceived( arguments.data.amount );
@@ -530,6 +545,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
                                 arguments.paymentTransaction.setAmountCredited( arguments.data.amount );
                             }
                         }
+                        arguments.paymentTransaction.setTransactionSuccessFlag( true );
 
 					}
 
@@ -537,7 +553,7 @@ component extends="HibachiService" persistent="false" accessors="true" output="f
 
 					// Set the transactionEndTickCount
 					arguments.paymentTransaction.setTransactionEndTickCount( getTickCount() );
-
+					getHibachiDAO().save(arguments.paymentTransaction);
 					// Flush the ORMSession again this transaction gets updated
 					getHibachiDAO().flushORMSession();
 				}

@@ -4,24 +4,15 @@ class SWAddFilterButtons{
 
     public static Factory():ng.IDirectiveFactory{
         var directive:ng.IDirectiveFactory = (
-            $http,
-            $compile,
-            $templateCache,
             collectionService,
             collectionPartialsPath,
             hibachiPathBuilder
         ) => new SWAddFilterButtons(
-            $http,
-            $compile,
-            $templateCache,
             collectionService,
             collectionPartialsPath,
             hibachiPathBuilder
         );
         directive.$inject = [
-            '$http',
-            '$compile',
-            '$templateCache',
             'collectionService',
             'collectionPartialsPath',
             'hibachiPathBuilder'
@@ -30,9 +21,6 @@ class SWAddFilterButtons{
     }
     //@ngInject
     constructor(
-        $http,
-        $compile,
-        $templateCache,
         collectionService,
         collectionPartialsPath,
         hibachiPathBuilder
@@ -43,7 +31,8 @@ class SWAddFilterButtons{
           restrict: 'E',
           templateUrl:hibachiPathBuilder.buildPartialsPath(collectionPartialsPath)+"addfilterbuttons.html",
           scope:{
-              itemInUse:"="
+              itemInUse:"=",
+              readOnly:"="
           },
           link: function(scope, element,attrs,filterGroupsController){
               scope.filterGroupItem = filterGroupsController.getFilterGroupItem();

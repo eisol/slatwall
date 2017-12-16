@@ -19,12 +19,18 @@ component output="false" accessors="true" extends="HibachiService" {
 			anyAdminAccessFlag = false,
 			publicAccessFlag = false,
 			entityPermissionAccessFlag = false,
-			actionPermissionAccessFlag = false
+			actionPermissionAccessFlag = false,
+			forbidden = false,
+			invalidToken = false,
+			timeout = false
 		};
 		
-		// Check if the user is a super admin, if true no need to worry about security
-		//Here superuser when not logged in is still false
-		if( arguments.account.getSuperUserFlag() ) {
+		if(!(!isNull(arguments.account.getJwtToken()) && arguments.account.getJwtToken().verify())){
+			authDetails.invalidToken = true;
+		}
+		
+		// Check if the user is a super admin 
+		if(getHibachiScope().getLoggedInFlag() && arguments.account.getSuperUserFlag() ) {
 			authDetails.authorizedFlag = true;
 			authDetails.superUserAccessFlag = true;
 			return authDetails;
@@ -148,8 +154,7 @@ component output="false" accessors="true" extends="HibachiService" {
 					}else{
 						authDetails.forbidden = true;
 					}
-				}else{
-					authDetails.invalidToken = true;
+					
 				}
 			}
 		}else{
@@ -179,6 +184,28 @@ component output="false" accessors="true" extends="HibachiService" {
 		
 		// If for some reason not of the above were meet then just return false
 		return false;
+	}
+	
+	public boolean function isInternalRequest(){
+		//domain contains http://domain/ so parse it
+		var httpArray = listtoArray(cgi.http_referer,'/');
+		if(arraylen(httpArray) >= 2){
+			var domainReferer = httpArray[2];
+		
+			return domainReferer == cgi.http_host;
+		}else{
+			return false;
+		}
+	} 
+	
+	public numeric function getInvalidCredentialsStatusCode(){
+		if(isInternalRequest()){
+			//499 for angular requests so we don't interfere with existing iis or apache 401 authentications on the internal app
+			return 499;
+		}else{
+			//401 for external api requests
+			return 401;
+		}
 	}
 	
 	public boolean function authenticateCollectionPropertyIdentifierCrudByAccount(required crudType, required any collection, required string propertyIdentifier, required any account){

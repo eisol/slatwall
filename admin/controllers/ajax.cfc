@@ -105,6 +105,7 @@ component persistent="false" accessors="true" output="false" extends="Slatwall.o
 		rc.ajaxResponse[ "currentPage" ] = smartList.getCurrentPage();
 		rc.ajaxResponse[ "totalPages" ] = smartList.getTotalPages();
 		rc.ajaxResponse[ "savedStateID" ] = smartList.getSavedStateID();
+		rc.ajaxResponse[ "globalSmartListGetAllRecordsLimit" ] = getHibachiScope().setting('globalSmartListGetAllRecordsLimit');
 		
 		if(arrayLen(popArray)) {
 			var processEntity = getHibachiService().getServiceByEntityName( entityName=rc.processEntity ).invokeMethod( "get#getHibachiService().getProperlyCasedShortEntityName( rc.processEntity )#", {1=rc.processEntityID} );
@@ -123,7 +124,7 @@ component persistent="false" accessors="true" output="false" extends="Slatwall.o
 				if((len(value) == 3 and value eq "YES") or (len(value) == 2 and value eq "NO")) {
 					thisRecord[ piArray[p] ] = value & " ";
 				} else {
-					thisRecord[ piArray[p] ] = value;
+					thisRecord[ piArray[p] ] = getService("HibachiUtilityService").hibachiHTMLEditFormat(value);
 				}
 			}
 			

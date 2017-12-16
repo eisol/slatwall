@@ -3,6 +3,7 @@ component accessors="true" output="false" extends="HibachiService" {
 	property name="cache" type="struct";
 	property name="internalCacheFlag" type="boolean";
 	property name="railoFlag" type="boolean";
+	 
 	
 	public any function init() {
 		setCache( {} );
@@ -19,7 +20,27 @@ component accessors="true" output="false" extends="HibachiService" {
 		
 		return super.init();
 	}
-
+	
+	public any function getServerInstanceByServerInstanceIPAddress(required any serverInstanceIPAddress){
+		var serverInstance = super.onMissingGetMethod(missingMethodName='getServerInstanceByServerInstanceIPAddress',missingMethodArguments=arguments);
+		
+		if(isNull(serverInstance) || serverInstance.getNewFlag()){
+			serverInstance = this.newServerInstance();
+			serverInstance.setServerInstanceIPAddress(arguments.serverInstanceIPAddress);
+			serverInstance.setServerInstanceExpired(false);
+			serverInstance.setSettingsExpired(false);
+			
+			this.saveServerInstance(serverInstance); 
+			getHibachiScope().flushOrmSession();
+		}
+		return serverInstance;
+	}
+	
+	
+	public any function getDatabaseCacheByDatabaseCacheKey(required databaseCacheKey){
+		return getDao('HibachiCacheDAO').getDatabaseCacheByDatabaseCacheKey(arguments.databaseCacheKey);
+	}
+	
 	public any function hasCachedValue( required string key ) {
 		// If using the internal cache, then check there
 		if( getInternalCacheFlag() && structKeyExists(getCache(), arguments.key) && structKeyExists(getCache()[ arguments.key ], "reset") && !getCache()[ arguments.key ].reset ) {
@@ -44,6 +65,30 @@ component accessors="true" output="false" extends="HibachiService" {
 		return false;
 	}
 	
+	public void function updateServerInstanceCache(required string serverInstanceIPAddress){
+		var serverInstance = this.getServerInstanceByServerInstanceIPAddress(arguments.serverInstanceIPAddress);
+		getDao('hibachiCacheDao').updateServerInstanceCache(serverInstance);
+	}
+	
+	public void function updateServerInstanceSettingsCache(required string serverInstanceIPAddress){
+		var serverInstance = this.getServerInstanceByServerInstanceIPAddress(arguments.serverInstanceIPAddress);
+		getDao('hibachiCacheDao').updateServerInstanceSettingsCache(serverInstance);
+	}
+	
+	public boolean function isServerInstanceCacheExpired(required string serverInstanceIPAddress){
+		var isExpired = getDao('hibachiCacheDao').isServerInstanceCacheExpired(arguments.serverInstanceIPAddress);
+		if(isNull(isExpired)){
+			this.getServerInstanceByServerInstanceIPAddress(arguments.serverInstanceIPAddress);
+			return false;
+		}else{
+			return isExpired;
+		}
+	} 
+	
+	public boolean function isServerInstanceSettingsCacheExpired(required string serverInstanceIPAddress){
+		return getDao('hibachiCacheDao').isServerInstanceSettingsCacheExpired(arguments.serverInstanceIPAddress);
+	} 
+		
 	public any function getCachedValue( required string key ) {
 		// If using the internal cache, then check there
 		if(getInternalCacheFlag() && structKeyExists(getCache(), key) ) {
@@ -97,10 +142,10 @@ component accessors="true" output="false" extends="HibachiService" {
 		}
 	}
 	
-	public any function resetCachedKeyByPrefix( required string keyPrefix ) {
+	public any function resetCachedKeyByPrefix( required string keyPrefix, boolean waitForThreadComplete=false ) {
 		// Because there could be lots of keys potentially we do this in a thread
-		thread name="hibachiCacheService_resetCachedKeyByPrefix_#createUUID()#" keyPrefix=arguments.keyPrefix {
-			
+		var threadName="hibachiCacheService_resetCachedKeyByPrefix_#replace(createUUID(),'-','','ALL')#";
+		thread name="#threadName#" keyPrefix=arguments.keyPrefix {
 			if(getInternalCacheFlag()) {
 				
 				var allKeysArray = listToArray(structKeyList(getCache()));
@@ -123,7 +168,13 @@ component accessors="true" output="false" extends="HibachiService" {
 			}
 			
 		}
+		if(arguments.waitForThreadComplete){
+			threadJoin(threadName);	
+		}
+		
+		return evaluate(threadName);
 	}
+	
 	
 	public any function getOrCacheFunctionValue(required string key, required any fallbackObject, required any fallbackFunction, struct fallbackArguments={}) {
 		// Check to see if this cache key already exists, and if so just return the cached value

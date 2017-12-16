@@ -15,10 +15,11 @@ import {RouterController} from "./controllers/routercontroller";
 import {SWDetailTabs} from "./components/swdetailtabs";
 import {SWDetail} from "./components/swdetail";
 import {SWList} from "./components/swlist";
+import {coremodule} from "../core/core.module";
 
 declare var $:any;
 
-var entitymodule = angular.module('hibachi.entity',['ngRoute'])
+var entitymodule = angular.module('hibachi.entity',['ngRoute',coremodule.name])
 .config(['$routeProvider','$injector','$locationProvider','appConfig',
 ($routeProvider,$injector,$locationProvider,appConfig)=>{
      //detect if we are in hashbang mode
@@ -30,12 +31,16 @@ var entitymodule = angular.module('hibachi.entity',['ngRoute'])
      if(vars.ng){
          $locationProvider.html5Mode( false ).hashPrefix('!');
      }
+    
+    var snakeToCapitalCase = (s)=>{
+        return s.charAt(0).toUpperCase() + s.replace(/(\-\w)/g, function(m){return m[1].toUpperCase();}).slice(1);
+    }
 
     $routeProvider.when('/entity/:entityName/', {
          template: function(params){
-             var entityDirectiveExists = $injector.has('sw'+params.entityName+'ListDirective');
+             var entityDirectiveExists = $injector.has('sw'+snakeToCapitalCase(params.entityName)+'ListDirective');
              if(entityDirectiveExists){
-                 return '<sw-'+params.entityName.toLowerCase()+'-list>';
+                 return '<sw-'+params.entityName.toLowerCase()+'-list></sw-'+params.entityName.toLowerCase()+'-list>';
              }else{
                  return '<sw-list></sw-list>';
              }
@@ -43,18 +48,21 @@ var entitymodule = angular.module('hibachi.entity',['ngRoute'])
          controller: 'routerController'
      }).when('/entity/:entityName/:entityID', {
          template: function(params){
-             var entityDirectiveExists = $injector.has('sw'+params.entityName+'DetailDirective');
+             
+             
+             var entityDirectiveExists = $injector.has('sw'+snakeToCapitalCase(params.entityName)+'DetailDirective');
              if(entityDirectiveExists){
-                 return '<sw-'+params.entityName.toLowerCase()+'-detail>';
+                 return '<sw-'+params.entityName.toLowerCase()+'-detail></sw-'+params.entityName.toLowerCase()+'-detail>';
              }else{
                  return '<sw-detail></sw-detail>';
              }
          },
          controller: 'routerController',
-     }).otherwise({
-         //controller:'otherwiseController'
-         templateUrl: appConfig.baseURL + '/admin/client/js/partials/otherwise.html',
-     });
+     })
+//        .otherwise({
+//         //controller:'otherwiseController'
+//         templateUrl: appConfig.baseURL + '/admin/client/js/partials/otherwise.html',
+//     });
 }])
 .constant('coreEntityPartialsPath','entity/components/')
 //services

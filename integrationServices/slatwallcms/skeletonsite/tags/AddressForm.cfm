@@ -89,7 +89,7 @@
 						<div class="controls">
 							
 							<sw:FormField type="select" name="#attributes.fieldNamePrefix#countryCode" valueObject="#attributes.address#" valueObjectProperty="countryCode" valueOptions="#attributes.address.getCountryCodeOptions()#" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="countryCode" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="countryCode" />
 							
 						</div>
 					</div>
@@ -102,7 +102,7 @@
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#name" valueObject="#attributes.address#" valueObjectProperty="name" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="name" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="name" />
 							
 						</div>
 					</div>
@@ -115,7 +115,7 @@
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#company" valueObject="#attributes.address#" valueObjectProperty="company" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="company" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="company" />
 							
 						</div>
 					</div>
@@ -123,12 +123,12 @@
 				
 				<!--- Street Address (important the data-sw-address allows for this to be modified by jQuery below)--->
 				<cfif thisField eq "streetAddress">
-					<div class="control-group#iif(attributes.address.getCountry().getStreetAddressShowFlag(), de(''), de(' hide'))#" data-sw-property="streetAddress">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getStreetAddressShowFlag(), '', ' hide')#" data-sw-property="streetAddress">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.streetAddress')#</label>
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#streetAddress" valueObject="#attributes.address#" valueObjectProperty="streetAddress" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="streetAddress" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="streetAddress" />
 							
 						</div>
 					</div>
@@ -136,12 +136,12 @@
 				
 				<!--- Street 2 Address (important the data-sw-address allows for this to be modified by jQuery below)--->
 				<cfif thisField eq "street2Address">
-					<div class="control-group#iif(attributes.address.getCountry().getStreet2AddressShowFlag(), de(''), de(' hide'))#" data-sw-property="street2Address">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getStreet2AddressShowFlag(), '', ' hide')#" data-sw-property="street2Address">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.street2Address')#</label>
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#street2Address" valueObject="#attributes.address#" valueObjectProperty="street2Address" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="street2Address" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="street2Address" />
 							
 						</div>
 					</div>
@@ -149,12 +149,12 @@
 				
 				<!--- Locality --->
 				<cfif thisField eq "locality">
-					<div class="control-group#iif(attributes.address.getCountry().getLocalityShowFlag(), de(''), de(' hide'))#" data-sw-property="locality">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getLocalityShowFlag(), '', ' hide')#" data-sw-property="locality">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.locality')#</label>
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#locality" valueObject="#attributes.address#" valueObjectProperty="locality" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="locality" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="locality" />
 							
 						</div>
 					</div>
@@ -162,12 +162,12 @@
 				
 				<!--- City --->
 				<cfif thisField eq "city">
-					<div class="control-group#iif(attributes.address.getCountry().getCityShowFlag(), de(''), de(' hide'))#" data-sw-property="city">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getCityShowFlag(), '', ' hide')#" data-sw-property="city">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.city')#</label>
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#city" valueObject="#attributes.address#" valueObjectProperty="city" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="city" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="city" />
 							
 						</div>
 					</div>
@@ -175,7 +175,7 @@
 				
 				<!--- State Code --->
 				<cfif thisField eq "stateCode">
-					<div class="control-group#iif(attributes.address.getCountry().getStateCodeShowFlag(), de(''), de(' hide'))#" data-sw-property="stateCode">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getStateCodeShowFlag(), '', ' hide')#" data-sw-property="stateCode">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.stateCode')#</label>
 						<div class="controls" data-sw-field="true">
 							
@@ -184,7 +184,7 @@
 							<cfelse>
 								<sw:FormField type="text" name="#attributes.fieldNamePrefix#stateCode" valueObject="#attributes.address#" valueObjectProperty="stateCode" class="#attributes.fieldClass#" />
 							</cfif>
-							<sw:errorDisplay object="#attributes.address#" errorName="stateCode" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="stateCode" />
 							
 						</div>
 					</div>
@@ -192,12 +192,12 @@
 				
 				<!--- Postal Code --->
 				<cfif thisField eq "postalCode">
-					<div class="control-group#iif(attributes.address.getCountry().getPostalCodeShowFlag(), de(''), de(' hide'))#" data-sw-property="postalCode">
+					<div class="control-group#request.slatwallScope.getService('hibachiUtilityService').hibachiTernary(attributes.address.getCountry().getPostalCodeShowFlag(), '', ' hide')#" data-sw-property="postalCode">
 						<label class="control-label" for="rating" data-sw-label="true">#request.slatwallScope.rbKey('entity.address.postalCode')#</label>
 						<div class="controls" data-sw-field="true">
 							
 							<sw:FormField type="text" name="#attributes.fieldNamePrefix#postalCode" valueObject="#attributes.address#" valueObjectProperty="postalCode" class="#attributes.fieldClass#" />
-							<sw:errorDisplay object="#attributes.address#" errorName="postalCode" />
+							<sw:ErrorDisplay object="#attributes.address#" errorName="postalCode" />
 							
 						</div>
 					</div>

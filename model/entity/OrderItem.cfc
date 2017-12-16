@@ -1,6 +1,6 @@
 /*
     Slatwall - An Open Source eCommerce Platform
-    Copyright (C) ten24, LLC
+    Copyright (C) ten24, LLC 
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -49,8 +49,17 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	property name="skuPrice" ormtype="big_decimal";
 	property name="currencyCode" ormtype="string" length="3";
 	property name="quantity" hb_populateEnabled="public" ormtype="integer";
+	property name="bundleItemQuantity" hb_populateEnabled="public" ormtype="integer";
 	property name="estimatedDeliveryDateTime" ormtype="timestamp";
 	property name="estimatedFulfillmentDateTime" ormtype="timestamp";
+	// Calculated Properties
+	property name="calculatedExtendedPrice" ormtype="big_decimal";
+	property name="calculatedExtendedUnitPrice" ormtype="big_decimal";
+	property name="calculatedExtendedPriceAfterDiscount" column="calcExtendedPriceAfterDiscount" ormtype="big_decimal";
+	property name="calculatedExtendedUnitPriceAfterDiscount" column="calcExtdUnitPriceAfterDiscount" ormtype="big_decimal";
+	property name="calculatedTaxAmount" ormtype="big_decimal";
+	property name="calculatedItemTotal" ormtype="big_decimal";
+	property name="calculatedDiscountAmount" ormtype="big_decimal";
 
 	// Related Object Properties (many-to-one)
 	property name="appliedPriceGroup" cfc="PriceGroup" fieldtype="many-to-one" fkcolumn="appliedPriceGroupID";
@@ -70,13 +79,18 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	property name="appliedTaxes" singularname="appliedTax" cfc="TaxApplied" fieldtype="one-to-many" fkcolumn="orderItemID" inverse="true" cascade="all-delete-orphan";
 	property name="attributeValues" singularname="attributeValue" cfc="AttributeValue" fieldtype="one-to-many" fkcolumn="orderItemID" inverse="true" cascade="all-delete-orphan";
 	property name="childOrderItems" hb_populateEnabled="public" singularname="childOrderItem" cfc="OrderItem" fieldtype="one-to-many" fkcolumn="parentOrderItemID" inverse="true" cascade="all-delete-orphan";
-	property name="eventRegistrations" singularname="eventRegistration" hb_populateEnabled="public" fieldtype="one-to-many" fkcolumn="orderItemID" cfc="EventRegistration" inverse="true" cascade="all-delete-orphan" lazy="extra" ;
+	property name="eventRegistrations" singularname="eventRegistration" hb_populateEnabled="public" fieldtype="one-to-many" fkcolumn="orderItemID" cfc="EventRegistration" inverse="true" cascade="all-delete-orphan" ;
 	property name="orderDeliveryItems" singularname="orderDeliveryItem" cfc="OrderDeliveryItem" fieldtype="one-to-many" fkcolumn="orderItemID" inverse="true" cascade="delete-orphan";
 	property name="stockReceiverItems" singularname="stockReceiverItem" cfc="StockReceiverItem" type="array" fieldtype="one-to-many" fkcolumn="orderItemID" inverse="true";
 	property name="referencingOrderItems" singularname="referencingOrderItem" cfc="OrderItem" fieldtype="one-to-many" fkcolumn="referencedOrderItemID" inverse="true" cascade="all"; // Used For Returns
 	property name="accountLoyaltyTransactions" singularname="accountLoyaltyTransaction" cfc="AccountLoyaltyTransaction" type="array" fieldtype="one-to-many" fkcolumn="orderItemID" cascade="all" inverse="true";
 	property name="giftCards" singularname="giftCard" cfc="GiftCard" type="array" fieldtype="one-to-many" fkcolumn="originalOrderItemID" cascade="all" inverse="true";
 	property name="orderItemGiftRecipients" singularname="orderItemGiftRecipient" cfc="OrderItemGiftRecipient" type="array" fieldtype="one-to-many" fkcolumn="orderItemID" cascade="all" inverse="true";
+
+	// Related Object Properties (many-to-many)
+
+	property name="shippingMethodOptionSplitShipments" singularname="shippingMethodOptionSplitShipment" cfc="ShippingMethodOptionSplitShipment" fieldtype="many-to-many" linktable="SwShipMethodOptSplitShipOrdItm" inversejoincolumn="shipMethodOptSplitShipmentID" fkcolumn="orderItemID";
+
 
 	// Remote properties
 	property name="publicRemoteID" ormtype="string" hb_populateEnabled="public";
@@ -92,7 +106,9 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	property name="activeEventRegistrations" persistent="false";
 	property name="discountAmount" persistent="false" hb_formatType="currency" hint="This is the discount amount after quantity (talk to Greg if you don't understand)" ;
 	property name="extendedPrice" persistent="false" hb_formatType="currency";
+	property name="extendedUnitPrice" persistent="false" hb_formatType="currency";
 	property name="extendedPriceAfterDiscount" persistent="false" hb_formatType="currency";
+	property name="extendedUnitPriceAfterDiscount" persistent="false" hb_formatType="currency";
 	property name="orderStatusCode" persistent="false";
 	property name="quantityDelivered" persistent="false";
 	property name="quantityUndelivered" persistent="false";
@@ -106,8 +122,13 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	property name="productBundlePrice" persistent="false" hb_formatType="currency";
 	property name="productBundleGroupPrice" persistent="false" hb_formatType="currency";
 	property name="salePrice" type="struct" persistent="false";
-
-
+	property name="totalWeight" persistent="false";
+	property name="quantityHasChanged" persistent="false" default="0";
+ 
+ 	public boolean function getQuantityHasChanged(){
+		return variables.quantityHasChanged;
+	}
+ 	
 	public numeric function getNumberOfUnassignedGiftCards(){
 
 		if(!this.isGiftCardOrderItem()){
@@ -144,39 +165,52 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
         return orderItemGiftRecipientSmartList;
     }
 
+	public numeric function getTotalWeight() {
+		return getService('HibachiUtilityService').precisionCalculate(getSku().getWeight() * getQuantity());
+	}
+
 	public numeric function getMaximumOrderQuantity() {
 		var maxQTY = 0;
-
 		if(getSku().getActiveFlag() && getSku().getProduct().getActiveFlag()) {
 			maxQTY = getSku().setting('skuOrderMaximumQuantity');
-
-			if(getSku().setting('skuTrackInventoryFlag') && !getSku().setting('skuAllowBackorderFlag')) {
+			if(getSku().setting('skuTrackInventoryFlag') && !getSku().setting('skuAllowBackorderFlag') && getOrderItemType().getSystemCode() neq 'oitReturn') {
 				if( !isNull(getStock()) && getStock().getQuantity('QATS') <= maxQTY ) {
 					maxQTY = getStock().getQuantity('QATS');
 					if(!isNull(getOrder()) && getOrder().getOrderStatusType().getSystemCode() neq 'ostNotPlaced') {
 						maxQTY += getService('orderService').getOrderItemDBQuantity( orderItemID=this.getOrderItemID() );
 					}
-				} else if(getSKU().getQuantity('QATS') <= maxQTY) {
-					maxQTY = getSku().getQuantity('QATS');
+				} else if(getSku().getQATS() <= maxQTY) {
+					
+					maxQTY = getSku().getQATS();
 					if(!isNull(getOrder()) && getOrder().getOrderStatusType().getSystemCode() neq 'ostNotPlaced') {
 						maxQTY += getService('orderService').getOrderItemDBQuantity( orderItemID=this.getOrderItemID() );
 					}
 				}
 			}
 		}
-
 		return maxQTY;
 	}
 
 
+ 	public boolean function getQuantityHasChangedOrOrderNotPlaced(){
+ 		if (getOrder().getStatusCode() == "ostNotPlaced" || getQuantityHasChanged()){
+ 			return true;
+ 		}
+ 		return false;
+ 	}
+ 	
     public boolean function hasQuantityWithinMaxOrderQuantity() {
         if(getOrderItemType().getSystemCode() == 'oitSale') {
         	var quantity = 0;
-        	for (var orderItem in getOrder().getOrderItems()){
-	            if (!isNull(orderItem.getSku()) && orderItem.getSku().getSkuID() == getSku().getSkuID()) {
-	                quantity += orderItem.getQuantity();
-	            }
-	        }
+			if(!isNull(getOrder())){
+				for (var orderItem in getOrder().getOrderItems()){
+					if (!isNull(orderItem.getSku()) && orderItem.getSku().getSkuID() == getSku().getSkuID()) {
+						quantity += orderItem.getQuantity();
+					}
+				}
+			} else {
+				quantity = getQuantity();
+			}
             return quantity <= getMaximumOrderQuantity();
         }
         return true;
@@ -185,14 +219,22 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
     public boolean function hasQuantityWithinMinOrderQuantity() {
         if(getOrderItemType().getSystemCode() == 'oitSale') {
         	var quantity = 0;
-        	for (var orderItem in getOrder().getOrderItems()){
-	            if (!isNull(orderItem.getSku()) && orderItem.getSku().getSkuID() == getSku().getSkuID()) {
-	                quantity += orderItem.getQuantity();
-	            }
-	        }
+        	if(!isNull(getOrder())){
+				for (var orderItem in getOrder().getOrderItems()){
+					if (!isNull(orderItem.getSku()) && orderItem.getSku().getSkuID() == getSku().getSkuID()) {
+						quantity += orderItem.getQuantity();
+					}
+				}
+			} else {
+				quantity = getQuantity();
+			}
             return quantity >= getSku().setting('skuOrderMinimumQuantity');
         }
         return true;
+    }
+
+    public boolean function isRootOrderItem(){
+    	return isNull(this.getParentOrderItem());
     }
 
 	public string function getOrderStatusCode(){
@@ -247,7 +289,7 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
     public numeric function getCombinedTaxRate() {
     	var taxRate = 0;
     	for(var i=1; i <= ArrayLen(getAppliedTaxes()); i++) {
-    		taxRate = precisionEvaluate(taxRate + getAppliedTaxes()[i].getTaxRate());
+    		taxRate = getService('HibachiUtilityService').precisionCalculate(taxRate + getAppliedTaxes()[i].getTaxRate());
     	}
 
     	return taxRate;
@@ -280,7 +322,13 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		var discountAmount = 0;
 
 		for(var i=1; i<=arrayLen(getAppliedPromotions()); i++) {
-			discountAmount = precisionEvaluate(discountAmount + getAppliedPromotions()[i].getDiscountAmount());
+			discountAmount = getService('HibachiUtilityService').precisionCalculate(discountAmount + getAppliedPromotions()[i].getDiscountAmount());
+		}
+
+		if(!isNull(getSku()) && getSku().getProduct().getProductType().getSystemCode() == 'productBundle'){
+			for(var childOrderItem in this.getChildOrderItems()){
+				discountAmount = getService('HibachiUtilityService').precisionCalculate(discountAmount + childOrderItem.getDiscountAmount());
+			}
 		}
 
 		return discountAmount;
@@ -295,8 +343,8 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		}else if(!isNull(getPrice())){
 			price = getPrice();
 		}
+		return val(getService('HibachiUtilityService').precisionCalculate(round(price * val(getQuantity()) * 100) / 100));
 
-		return precisionEvaluate(round(price * val(getQuantity()) * 100) / 100);
 	}
 
 
@@ -307,7 +355,11 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		for(var childOrderItem in this.getChildOrderItems()){
 			var childProductBundleGroupPrice = getProductBundleGroupPrice(childOrderItem);
 			var childQuantity = childOrderItem.getQuantity();
-			productBundlePrice += precisionEvaluate(childProductBundleGroupPrice * childQuantity);
+			//if we have a package quantity use that instead
+			if(!isNull(childOrderItem.getBundleItemQuantity())){
+				childQuantity = childOrderItem.getBundleItemQuantity();
+			}
+			productBundlePrice += getService('HibachiUtilityService').precisionCalculate(childProductBundleGroupPrice * childQuantity);
 		}
 
 		return productBundlePrice;
@@ -318,7 +370,11 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 			arguments.orderItem = this;
 		}
 
-		var amountType = arguments.orderItem.getProductBundleGroup().getAmountType();
+		var amountType = "skuPrice";//default
+		if (!isNull(arguments.orderItem.getProductBundleGroup())){
+			amountType = arguments.orderItem.getProductBundleGroup().getAmountType();
+		}
+
 		//fixed
 		if(amountType == 'fixed'){
 			return arguments.orderItem.getProductBundleGroup().getAmount();
@@ -368,18 +424,36 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 
 
 	public numeric function getExtendedSkuPrice() {
-		return precisionEvaluate(getSkuPrice() * getQuantity());
+		return getService('HibachiUtilityService').precisionCalculate(getSkuPrice() * getQuantity());
 	}
 
 	public numeric function getExtendedPriceAfterDiscount() {
-		return precisionEvaluate(getExtendedPrice() - getDiscountAmount());
+		return getService('HibachiUtilityService').precisionCalculate(getExtendedPrice() - getDiscountAmount());
+	}
+
+	public numeric function getExtendedUnitPrice() {
+		if(!isNull(getQuantity()) && getQuantity() > 0){
+			return val(precisionEvaluate(getExtendedPrice() / getQuantity()));	
+		}else{
+			return 0;
+		}
+		
+	}
+
+	public numeric function getExtendedUnitPriceAfterDiscount() {
+		if(!isNull(getQuantity()) && getQuantity() > 0){
+			return val(precisionEvaluate(getExtendedPriceAfterDiscount() / getQuantity()));
+		}else{
+			return 0;
+		}
+		
 	}
 
 	public any function getActiveEventRegistrations() {
 		if(!structKeyExists(variables, "activeRegistrationsSmartList")) {
 			variables.activeRegistrationsSmartList = getService('EventRegistrationService').getEventRegistrationSmartList();
 			variables.activeRegistrationsSmartList.addFilter('orderItem.orderItemID', getOrderItemID());
-			variables.activeRegistrationsSmartList.addInFilter('eventRegistrationStatusType.systemCode', 'erstRegistered,erstWaitListed,erstPendingApproval,erstAttended,erstNotPlaced');
+			variables.activeRegistrationsSmartList.addInFilter('eventRegistrationStatusType.systemCode', 'erstRegistered,erstWaitListed,erstPendingApproval,erstPendingConfirmation,erstAttended,erstNotPlaced');
 		}
 
 		return variables.activeRegistrationsSmartList;
@@ -389,7 +463,7 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		var taxAmount = 0;
 
 		for(var taxApplied in getAppliedTaxes()) {
-			taxAmount = precisionEvaluate(taxAmount + taxApplied.getTaxAmount());
+			taxAmount = getService('HibachiUtilityService').precisionCalculate(taxAmount + taxApplied.getTaxAmount());
 		}
 
 		return taxAmount;
@@ -399,10 +473,32 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		var taxLiabilityAmount = 0;
 
 		for(var taxApplied in getAppliedTaxes()) {
-			taxLiabilityAmount = precisionEvaluate(taxLiabilityAmount + taxApplied.getTaxLiabilityAmount());
+			taxLiabilityAmount = getService('HibachiUtilityService').precisionCalculate(taxLiabilityAmount + taxApplied.getTaxLiabilityAmount());
 		}
 
 		return taxLiabilityAmount;
+	}
+
+	public void function setQuantity(required numeric quantity){
+		if (structKeyExists(variables, "quantity") && arguments.quantity != variables.quantity){
+ 			variables.quantityHasChanged = true; //a dirty check flag for validation.
+ 		}		
+		variables.quantity = arguments.quantity;
+		if(this.isRootOrderItem()){
+			for(var childOrderItem in this.getChildOrderItems()){
+				if (!isNull(childOrderItem.getBundleItemQuantity()) && structKeyExists(variables, "quantity")){
+					var newQuantity = getService('HibachiUtilityService').precisionCalculate(childOrderItem.getBundleItemQuantity() * variables.quantity);
+					childOrderItem.setQuantity(newQuantity);
+				}
+			}
+		}
+	}
+
+	public void function setBundleItemQuantity(required numeric bundleItemQuantity){
+		if(!this.isRootOrderItem()){
+			variables.bundleItemQuantity = arguments.bundleItemQuantity;
+			variables.quantity = getService('HibachiUtilityService').precisionCalculate(getParentOrderItem().getQuantity() * variables.bundleItemQuantity);
+		}
 	}
 
 	public numeric function getQuantityDelivered() {
@@ -438,7 +534,7 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	}
 
 	public numeric function getItemTotal() {
-		return precisionEvaluate(getTaxAmount() + getExtendedPriceAfterDiscount());
+		return val(getService('HibachiUtilityService').precisionCalculate(getTaxAmount() + getExtendedPriceAfterDiscount()));
 	}
 
 	public any function getSalePrice() {
@@ -625,6 +721,14 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 		arguments.attributeValue.removeOrderItem( this );
 	}
 
+	// Event Registrations (one-to-many)
+ 	public void function addEventRegistration(required any eventRegistration) {
+		arguments.eventRegistration.setOrderItem( this );
+  	}
+	public void function removeEventRegistration(required any eventRegistration) {
+ 		arguments.eventRegistration.removeOrderItem( this );
+  	}
+
 	// Child Order Items (one-to-many)
 	public void function addChildOrderItem(required any childOrderItem) {
 		arguments.childOrderItem.setParentOrderItem( this );
@@ -656,6 +760,27 @@ component entityname="SlatwallOrderItem" table="SwOrderItem" persistent="true" a
 	public void function removeReferencingOrderItem(required any referencingOrderItem) {
 		arguments.referencingOrderItem.removeReferencedOrderItem( this );
 	}
+
+	// ShippingMethodOptionSplitShipment (many-to-many - owner)
+	public void function addShippingMethodOptionSplitShipment(required any shippingMethodOptionSplitShipment) {
+		if(isNew() or !hasShippingMethodOptionSplitShipment(arguments.shippingMethodOptionSplitShipment)) {
+			arrayAppend(variables.shippingMethodOptionSplitShipments, arguments.shippingMethodOptionSplitShipment);
+		}
+		if(arguments.shippingMethodOptionSplitShipment.isNew() or !arguments.shippingMethodOptionSplitShipment.hasShipmentOrderItem( this )) {
+			arrayAppend(arguments.shippingMethodOptionSplitShipment.getShipmentOrderItems(), this);
+		}
+	}
+	public void function removeShippingMethodOptionSplitShipment(required any shippingMethodOptionSplitShipment) {
+		var thisIndex = arrayFind(variables.shippingMethodOptionSplitShipment, arguments.shippingMethodOptionSplitShipment);
+		if(thisIndex > 0) {
+			arrayDeleteAt(variables.shippingMethodOptionSplitShipments, thisIndex);
+		}
+		var thatIndex = arrayFind(arguments.shippingMethodOptionSplitShipment.getShipmentOrderItems(), this);
+		if(thatIndex > 0) {
+			arrayDeleteAt(arguments.shippingMethodOptionSplitShipment.getShipmentOrderItems(), thatIndex);
+		}
+	}
+
 
 	// =============  END:  Bidirectional Helper Methods ===================
 

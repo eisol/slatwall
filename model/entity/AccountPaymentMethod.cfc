@@ -74,7 +74,8 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 	property name="paymentTerm" hb_populateEnabled="public" cfc="PaymentTerm" fieldtype="many-to-one" fkcolumn="paymentTermID" fetch="join";
 
 	// Related Object Properties (one-to-many)
-	property name="orderPayments" singularname="orderPayment" cfc="OrderPayment" fieldtype="one-to-many" fkcolumn="accountPaymentMethodID" cascade="all" inverse="true" lazy="extra";
+	property name="subscriptionUsages" singularname="subscriptionUsage" hb_populateEnabled="public" cfc="SubscriptionUsage" fieldtype="one-to-many" fkcolumn="accountPaymentMethodID" cascade="all";
+	property name="orderPayments" singularname="orderPayment" cfc="OrderPayment" fieldtype="one-to-many" fkcolumn="accountPaymentMethodID" inverse="true" lazy="extra";
 	property name="paymentTransactions" singularname="paymentTransaction" cfc="PaymentTransaction" type="array" fieldtype="one-to-many" fkcolumn="accountPaymentMethodID" cascade="all" inverse="true";
 
 	// Related Object Properties (many-to-many)
@@ -100,6 +101,9 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 	property name="paymentMethodOptionsSmartList" persistent="false";
 
 	public string function getPaymentMethodType() {
+		if(isNull(getPaymentMethod())){
+			return "";
+		}
 		return getPaymentMethod().getPaymentMethodType();
 	}
 
@@ -128,6 +132,24 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 			arrayAppend(yearOptions,{name=thisYear, value=right(thisYear,2)});
 		}
 		return yearOptions;
+	}
+
+	public boolean function isExpired(){
+		if(!isNull(this.getExpirationMonth()) && !isNull(this.getExpirationYear())){
+			var expirationYearAsInteger =  LSParseNumber(this.getExpirationYear());
+			var expirationMonthAsInteger = LSParseNumber(this.getExpirationMonth());
+			var currentYear = right(year(now()),2);
+			var currentMonth = month(now());
+
+			if(currentYear < expirationYearAsInteger){
+				return false;
+			} else {
+				return currentMonth >= expirationMonthAsInteger
+					&& currentYear == expirationYearAsInteger;
+			}
+		} else {
+			return false;
+		}
 	}
 
 	public void function copyFromOrderPayment(required any orderPayment) {
@@ -229,9 +251,18 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 	}
 
 	public void function setupEncryptedProperties() {
-		if(getCreditCardType() != "Invalid" && !isNull(getPaymentMethod()) && !isNull(getPaymentMethod().getSaveAccountPaymentMethodEncryptFlag()) && getPaymentMethod().getSaveAccountPaymentMethodEncryptFlag()) {
+		if( len(getCreditCardNumber()) > 0
+			&& getCreditCardType() != "Invalid"
+			&& !isNull(getPaymentMethod())
+			&& !isNull(getPaymentMethod().getSaveAccountPaymentMethodEncryptFlag())
+			&& getPaymentMethod().getSaveAccountPaymentMethodEncryptFlag()
+		) {
 			encryptProperty('creditCardNumber');
 		}
+	}
+
+	public boolean function hasOnlyGenerateTokenTransactions() {
+		return getDAO("paymentDAO").getAccountPaymentMethodNonGenerateTokenTransactionCount( accountPaymentMethodID = this.getAccountPaymentMethodID() ) eq 0;
 	}
 
 	// ============ START: Non-Persistent Property Methods =================
@@ -254,6 +285,7 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 			sl.addSelect('paymentMethodType', 'paymentmethodtype');
 
 			variables.paymentMethodOptions = sl.getRecords();
+			arrayPrepend(variables.paymentMethodOptions, {name=getHibachiScope().getRBKey("entity.accountPaymentMethod.paymentMethod.select"), value=""});
 		}
 		return variables.paymentMethodOptions;
 	}
@@ -267,25 +299,19 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 		if(this.isGiftCardAccountPaymentMethod()){
 			return getService("HibachiService").getGiftCard(getDAO("GiftCardDAO").getIDbyCode(this.getGiftCardNumberEncrypted()));
 		}
-		return false;
 	}
 
 	public any function getGiftCardBalanceAmount(){
-
 		if(this.isGiftCardAccountPaymentMethod()){
 			return this.getGiftCard().getBalanceAmount();
-		} else {
-			return false;
 		}
 	}
 
 	public string function getGiftCardBalanceAmountFormatted(){
-
-		if(this.getGiftCardBalanceAmount() EQ False){
-			return "";
-		} else {
-			return getService("HibachiUtilityService").formatValue_currency(this.getGiftCard().getBalanceAmount(), this.getGiftCard().getCurrencyCode());
+		if(!isNull(this.getGiftCardBalanceAmount())){
+			return getService("HibachiUtilityService").formatValue_currency(this.getGiftCardBalanceAmount(), {currencyCode=this.getGiftCard().getCurrencyCode()});
 		}
+		return "";
 	}
 
 	// ============  END:  Non-Persistent Property Methods =================
@@ -383,7 +409,7 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 	public string function getSimpleRepresentation() {
 		var rep = "";
 		if(!isNull(getAccountPaymentMethodName()) && len(getAccountPaymentMethodName())) {
-			var rep = getAccountPaymentMethodName() & " ";
+			rep = getAccountPaymentMethodName() & " ";
 		}
 		if(!isNull(getPaymentMethod())) {
 			if(getPaymentMethodType() == "creditCard") {
@@ -395,6 +421,9 @@ component displayname="Account Payment Method" entityname="SlatwallAccountPaymen
 			if(getPaymentMethodType() == "giftCard" && !isNull(getGiftCardNumber()) && len(getGiftCardNumber())) {
 				rep = listAppend(rep, " #getGiftCardNumber()#", "|");
 			}
+		}
+		if(getPaymentMethodType() == "creditCard" && isExpired()){
+			rep = rep & ' (' & rbkey('define.expired') & ')';
 		}
 		return rep;
 	}

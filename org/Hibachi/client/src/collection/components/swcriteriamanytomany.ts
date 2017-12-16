@@ -16,10 +16,7 @@ class SWCriteriaManyToMany{
         )=> new SWCriteriaManyToMany(
             $log,
             $hibachi,
-            $filter,
             collectionPartialsPath,
-            collectionService,
-            metadataService,
             dialogService,
             observerService,
 			hibachiPathBuilder,
@@ -28,10 +25,7 @@ class SWCriteriaManyToMany{
         directive.$inject = [
             '$log',
             '$hibachi',
-            '$filter',
             'collectionPartialsPath',
-            'collectionService',
-            'metadataService',
             'dialogService',
             'observerService',
 			'hibachiPathBuilder',
@@ -42,10 +36,7 @@ class SWCriteriaManyToMany{
     constructor(
         $log,
         $hibachi,
-        $filter,
         collectionPartialsPath,
-        collectionService,
-        metadataService,
         dialogService,
         observerService,
         hibachiPathBuilder,
@@ -166,7 +157,7 @@ class SWCriteriaManyToMany{
                 };
 
                 scope.viewSelectedCollection = function(){
-                    dialogService.addPageDialog('org/Hibachi/client/src/collection/components//criteriacreatecollection', {
+                    dialogService.addPageDialog('org/Hibachi/client/src/collection/components/criteriacreatecollection', {
                         entityName: 'collection',
                         entityId: scope.selectedFilterProperty.selectedCollection.collectionID,
                         parentEntity: scope.collectionConfig.baseEntityName

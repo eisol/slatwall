@@ -48,12 +48,15 @@ Notes:
 */
 component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 
-	// @hint put things in here that you want to run befor EACH test
+	// @hint put things in here that you want to run befor EACH test	
 	public void function setUp() {
 		super.setup();
 
 	}
-
+	
+	/**
+	* @test
+	*/
 	public void function test_adding_credit(){
 
 		var giftCardData = {
@@ -89,7 +92,7 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 
 		var orderPayment = createPersistedTestEntity("OrderPayment", orderPaymentData);
 
-		processGiftCard.setOrderPayments([orderPayment]);
+		processGiftCard.setOrderPayment(orderPayment);
 
 		var creditTransactionData = {
 			giftCardTransaction=""
@@ -97,10 +100,8 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 
 		var creditTransaction = createPersistedTestEntity('giftCardTransaction', creditTransactionData);
 
-		for(var payment in processGiftCard.getOrderPayments()){
-			creditTransaction.setOrderPayment(payment);
-			assertTrue(payment.getOrderPaymentID() == orderPayment.getOrderPaymentID());
-		}
+		creditTransaction.setOrderPayment(orderPayment);
+		assertTrue(creditTransaction.getOrderPayment().getOrderPaymentID() == orderPayment.getOrderPaymentID());
 
 		creditTransaction.setCreditAmount(processGiftCard.getCreditAmount());
 

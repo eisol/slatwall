@@ -1,25 +1,24 @@
 component output="false" accessors="true" extends="HibachiTransient" {
 
 	property name="account" type="any";
+	property name="content" type="any";
 	property name="session" type="any";
-	
-	property name="loggedInFlag" type="boolean";
 	property name="loggedInAsAdminFlag" type="boolean";
 	property name="publicPopulateFlag" type="boolean";
 	property name="persistSessionFlag" type="boolean";
 	property name="sessionFoundNPSIDCookieFlag" type="boolean";
 	property name="sessionFoundPSIDCookieFlag" type="boolean";
-	
+	property name="sessionFoundExtendedPSIDCookieFlag" type="boolean";
 	property name="ormHasErrors" type="boolean" default="false";
 	property name="rbLocale";
 	property name="url" type="string";
-	
 	property name="calledActions" type="array";
 	property name="failureActions" type="array";
 	property name="successfulActions" type="array";
-	
 	property name="auditsToCommitStruct" type="struct";
 	property name="modifiedEntities" type="array";
+	property name="hibachiAuthenticationService" type="any";
+	property name="isAWSInstance" type="boolean" default="0";
 	
 	public any function init() {
 		setORMHasErrors( false );
@@ -28,16 +27,60 @@ component output="false" accessors="true" extends="HibachiTransient" {
 		setPersistSessionFlag( true );
 		setSessionFoundNPSIDCookieFlag( false );
 		setSessionFoundPSIDCookieFlag( false );
-		
+		setSessionFoundExtendedPSIDCookieFlag( false );
 		setCalledActions( [] );
 		setSuccessfulActions( [] );
 		setFailureActions( [] );
-		
 		setAuditsToCommitStruct( {} );
 		setModifiedEntities( [] );
 		
-		
 		return super.init();
+	}
+	
+	public string function getServerInstanceIPAddress(){
+		
+		//Check if we already have a instanceIP assigned.
+		if(hasApplicationValue("instanceIP")){
+			return getApplicationValue("instanceIP");
+		}
+		//If we are not using aws, then assign the instance ip and return it.
+		if (!getHibachiScope().getIsAwsInstance()){
+			var ipAddress = createObject("java", "java.net.InetAddress").localhost.getHostAddress();
+			setApplicationValue("instanceIP", ipAddress);
+			return ipAddress;
+		}
+		
+		//populate cache using AWS if available.
+		// SET AWS Instance IP Address if one exists.
+		httpService = new http();
+		httpService.setTimeout(3);
+		httpService.setMethod("get");
+		httpService.setUrl("169.254.169.254/latest/meta-data/local-ipv4");
+		result = httpService.send().getPrefix();
+		
+		if (result.fileContent != "Connection Timeout" and result.fileContent != "Connection Failure"){
+			var ipAddress = result.filecontent;
+		}
+		
+		//if result exists set cache to this and return it.
+		if (!isNull(ipAddress) && len(ipAddress)){
+			// GET AWS Instance IP, cache it and return it.
+			setApplicationValue("instanceIP", ipAddress);
+			return ipAddress;
+		}
+		
+		return createObject("java", "java.net.InetAddress").localhost.getHostAddress();//returned but not cached.
+	}
+	
+	public any function getHibachiAuthenticationService(){
+		if(!structKeyExists(variables,'hibachiAuthenticationService')){
+			variables.hibachiAuthenticationService = getService('hibachiAuthenticationService');	
+		}
+		return variables.hibachiAuthenticationService;
+	} 
+	
+	public void function setHibachiAuthenticationService(required any hibachiAuthenticationService){
+		variables.hibachiAuthenticationService = arguments.hibachiAuthenticationService;
 	}
 	
 	// @hint facade method to check the application scope for a value
@@ -97,16 +140,26 @@ component output="false" accessors="true" extends="HibachiTransient" {
 		setAuditsToCommitStruct({});
 	}
 	
+	/** This checks if the user is logged in by checking whether or not the user has manually logged out or has timed out.  
+	 *  This method should return as it always has. 
+	 */
 	public boolean function getLoggedInFlag() {
-		if(!getSession().getAccount().getNewFlag()) {
-			return true;
-		}
-		return false;
+		return getSession().getLoggedInFlag();
 	}
 	
+	/**
+	 * Because we are not removing the account from the session, logged in flag needs to
+	 * be checked before checking if they are an admin account.
+	 */
 	public boolean function getLoggedInAsAdminFlag() {
-		if(getAccount().getAdminAccountFlag()) {
+		if(!isNull(getSession()) &&
+			getSession().getLoggedInFlag() && 
+		   !isNull(getSession().getAccount()) && 
+		   !isNull(getSession().getAccount().getAdminAccountFlag()) &&  
+			getSession().getAccount().getAdminAccountFlag()) {
+				
 			return true;
+			
 		}
 		return false;
 	}
@@ -249,6 +302,10 @@ component output="false" accessors="true" extends="HibachiTransient" {
 	
 	// ========================== HELPER DELIGATION METHODS ===============================
 	
+	public string function hibachiHTMLEditFormat(required any html){
+		return getService('hibachiUtilityService').hibachiHTMLEditFormat(arguments.html);
+	}
+	
 	// @hint helper function to return the RB Key from RB Factory in any component
 	public string function rbKey(required string key, struct replaceStringData) {
 		var keyValue = getService("hibachiRBService").getRBKey(arguments.key, getRBLocale());
@@ -263,22 +320,22 @@ component output="false" accessors="true" extends="HibachiTransient" {
 	}
 	
 	public boolean function authenticateAction( required string action ) {
-		return getService("hibachiAuthenticationService").authenticateActionByAccount( action=arguments.action, account=getAccount() );
+		return getHibachiAuthenticationService().authenticateActionByAccount( action=arguments.action, account=getAccount() );
 	}
 
 	public boolean function authenticateEntity( required string crudType, required string entityName ) {
-		return getService("hibachiAuthenticationService").authenticateEntityCrudByAccount( crudType=arguments.crudType, entityName=arguments.entityName, account=getAccount() );
+		return getHibachiAuthenticationService().authenticateEntityCrudByAccount( crudType=arguments.crudType, entityName=arguments.entityName, account=getAccount() );
 	}
 	
 	public boolean function authenticateEntityProperty( required string crudType, required string entityName, required string propertyName ) {
-		return getService("hibachiAuthenticationService").authenticateEntityPropertyCrudByAccount( crudType=arguments.crudType, entityName=arguments.entityName, propertyName=arguments.propertyName, account=getAccount() );
+		return getHibachiAuthenticationService().authenticateEntityPropertyCrudByAccount( crudType=arguments.crudType, entityName=arguments.entityName, propertyName=arguments.propertyName, account=getAccount() );
 	}
 	
 	public boolean function authenticateCollection(required string crudType, required any collection){
-		return getService("hibachiAuthenticationService").authenticateCollectionCrudByAccount( crudType=arguments.crudType, collection=arguments.collection, account=getAccount() );
+		return getHibachiAuthenticationService().authenticateCollectionCrudByAccount( crudType=arguments.crudType, collection=arguments.collection, account=getAccount() );
 	}
 	
 	public boolean function authenticateCollectionPropertyIdentifier(required string crudType, required any collection, required string propertyIdentifier){
-		return getService("hibachiAuthenticationService").authenticateCollectionPropertyIdentifierCrudByAccount( crudType=arguments.crudType, collection=arguments.collection, propertyIdentifier=arguments.propertyIdentifier, account=getAccount() );
+		return getHibachiAuthenticationService().authenticateCollectionPropertyIdentifierCrudByAccount( crudType=arguments.crudType, collection=arguments.collection, propertyIdentifier=arguments.propertyIdentifier, account=getAccount() );
 	}
 }

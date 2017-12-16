@@ -42,7 +42,7 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		// Make sure that the containers for smart list saved states are in place
 		param name="session.entitySmartList" type="struct" default="#structNew()#";
 		param name="session.entitySmartList.savedStates" type="array" default="#arrayNew(1)#";
-		
+
 		// Set defaults for the main properties
 		setEntities({});
 		setEntityJoinOrder([]);
@@ -213,10 +213,11 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 	}
 	
 	public string function joinRelatedProperty(required string parentEntityName, required string relatedProperty, string joinType="", boolean fetch=false, boolean isAttribute=false) {
+		var newEntityName = "";
 		if(arguments.isAttribute) {
 			
 			var newEntityMeta = getService("hibachiService").getEntityObject( "AttributeValue" ).getThisMetaData();
-			var newEntityName = "#parentEntityName#_#UCASE(arguments.relatedProperty)#";
+			newEntityName = "#parentEntityName#_#UCASE(arguments.relatedProperty)#";
 			var newEntityAlias = "#variables.entities[ arguments.parentEntityName ].entityAlias#_#lcase(arguments.relatedProperty)#";
 			
 			if(!structKeyExists(variables.entities, newEntityName)) {
@@ -237,71 +238,73 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 				);
 			}
 			
-			return newEntityName;
 		} else {
-			var newEntityMeta = getService("hibachiService").getEntityObject( listLast(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].cfc, ".") ).getThisMetaData();
-		
-			// Figure out the newEntityName
-			if(structKeyExists(newEntityMeta, "entityName")) {
-				var newEntityName = newEntityMeta.entityName;
-			} else {
-				var newEntityName = listLast(newEntityMeta.fullName,".");
-			}
-			
-			// Figure out the newEntityAliase
-			var aliaseOK = false;
-			var aoindex = 1;
-			var aolist = "a,b,c,d,e,f,g,h,i,j,k,l";
-			var baseAliase = newEntityName;
-			do {
-				var newEntityAlias = "#listGetAt(aolist,aoindex)##lcase(baseAliase)#";
-				if(aoindex > 1) {
-					newEntityName = "#lcase(newEntityName)#_#UCASE(listGetAt(aolist,aoindex))#";
-				}
-				if( (structKeyExists(variables.entities, newEntityName) && variables.entities[newEntityName].entityAlias == newEntityAlias && variables.entities[newEntityName].parentRelatedProperty != relatedProperty) || newEntityAlias == variables.entities[ arguments.parentEntityName ].entityAlias) {
-					aoindex++;
-				} else {
-					aliaseOK = true;
-				}
-			} while(!aliaseOK);
-			
-			// Check to see if this is a Self Join, and setup appropriatly.
-			if(newEntityAlias == variables.entities[ arguments.parentEntityName ].entityAlias) {
-				arguments.fetch = false;
-			}
-			
-			if(!structKeyExists(variables.entities,newEntityName)) {
-				arrayAppend(variables.entityJoinOrder, newEntityName);
+			if(structKeyExists(variables.entities[ arguments.parentEntityName ].entityProperties,arguments.relatedProperty)){
 				
-				if(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].fieldtype == "many-to-one" && !structKeyExists(arguments, "fetch") && arguments.parentEntityName == getBaseEntityName()) {
-					arguments.fetch = true;
-				} else if(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].fieldtype == "one-to-one" && !structKeyExists(arguments, "fetch")) {
-					arguments.fetch = true;
-				} else if(!structKeyExists(arguments, "fetch")) {
+				
+				var newEntityMeta = getService("hibachiService").getEntityObject( listLast(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].cfc, ".") ).getThisMetaData();
+			
+				// Figure out the newEntityName
+				if(structKeyExists(newEntityMeta, "entityName")) {
+					newEntityName = newEntityMeta.entityName;
+				} else {
+					newEntityName = listLast(newEntityMeta.fullName,".");
+				}
+				
+				// Figure out the newEntityAliase
+				var aliaseOK = false;
+				var aoindex = 1;
+				var aolist = "a,b,c,d,e,f,g,h,i,j,k,l";
+				var baseAliase = newEntityName;
+				do {
+					var newEntityAlias = "#listGetAt(aolist,aoindex)##lcase(baseAliase)#";
+					if(aoindex > 1) {
+						newEntityName = "#lcase(newEntityName)#_#UCASE(listGetAt(aolist,aoindex))#";
+					}
+					if( (structKeyExists(variables.entities, newEntityName) && variables.entities[newEntityName].entityAlias == newEntityAlias && variables.entities[newEntityName].parentRelatedProperty != relatedProperty) || newEntityAlias == variables.entities[ arguments.parentEntityName ].entityAlias) {
+						aoindex++;
+					} else {
+						aliaseOK = true;
+					}
+				} while(!aliaseOK);
+				
+				// Check to see if this is a Self Join, and setup appropriatly.
+				if(newEntityAlias == variables.entities[ arguments.parentEntityName ].entityAlias) {
 					arguments.fetch = false;
 				}
 				
-				addEntity(
-					entityName=newEntityName,
-					entityAlias=newEntityAlias,
-					entityFullName=newEntityMeta.fullName,
-					entityProperties=getPropertiesStructFromEntityMeta(newEntityMeta),
-					parentAlias=variables.entities[ arguments.parentEntityName ].entityAlias,
-					parentRelatedProperty=variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].name,
-					joinType=arguments.joinType,
-					fetch=arguments.fetch
-				);
-			} else {
-				if(arguments.joinType != "") {
-					variables.entities[newEntityName].joinType = arguments.joinType;
-				}
-				if(structKeyExists(arguments, "fetch")) {
-					variables.entities[newEntityName].fetch = arguments.fetch;
+				if(!structKeyExists(variables.entities,newEntityName)) {
+					arrayAppend(variables.entityJoinOrder, newEntityName);
+					
+					if(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].fieldtype == "many-to-one" && !structKeyExists(arguments, "fetch") && arguments.parentEntityName == getBaseEntityName()) {
+						arguments.fetch = true;
+					} else if(variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].fieldtype == "one-to-one" && !structKeyExists(arguments, "fetch")) {
+						arguments.fetch = true;
+					} else if(!structKeyExists(arguments, "fetch")) {
+						arguments.fetch = false;
+					}
+					
+					addEntity(
+						entityName=newEntityName,
+						entityAlias=newEntityAlias,
+						entityFullName=newEntityMeta.fullName,
+						entityProperties=getPropertiesStructFromEntityMeta(newEntityMeta),
+						parentAlias=variables.entities[ arguments.parentEntityName ].entityAlias,
+						parentRelatedProperty=variables.entities[ arguments.parentEntityName ].entityProperties[ arguments.relatedProperty ].name,
+						joinType=arguments.joinType,
+						fetch=arguments.fetch
+					);
+				} else {
+					if(arguments.joinType != "") {
+						variables.entities[newEntityName].joinType = arguments.joinType;
+					}
+					if(structKeyExists(arguments, "fetch")) {
+						variables.entities[newEntityName].fetch = arguments.fetch;
+					}
 				}
 			}
-			
-			return newEntityName;	
 		}
+		return newEntityName;	
 	}
 	
 	private void function addEntity(required string entityName, required string entityAlias, required string entityFullName, required struct entityProperties, string parentAlias="", string parentRelatedProperty="", string joinType="") {
@@ -469,7 +472,7 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		return variables.whereGroups[ arguments.whereGroup ].ranges; 
 	}
 	
-	public void function addOrder(required string orderStatement, numeric position) {
+	public void function addOrder(required string orderStatement) {
 		var propertyIdentifier = listFirst(arguments.orderStatement, variables.orderDirectionDelimiter);
 		var orderDirection = "ASC";
 		if(listLen(arguments.orderStatement, variables.orderDirectionDelimiter) > 1 && listFindNoCase("D,DESC", listLast(arguments.orderStatement, variables.orderDirectionDelimiter))) {
@@ -489,10 +492,29 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		}
 	}
 
+	public void function removeOrder(required string orderStatement) {
+		var propertyIdentifier = listFirst(arguments.orderStatement, variables.orderDirectionDelimiter);
+		var orderDirection = "ASC";
+		if(listLen(arguments.orderStatement, variables.orderDirectionDelimiter) > 1 && listFindNoCase("D,DESC", listLast(arguments.orderStatement, variables.orderDirectionDelimiter))) {
+			orderDirection = "DESC";
+		}
+		var aliasedProperty = getAliasedProperty(propertyIdentifier=propertyIdentifier);
+		for(var i=1; i <= arraylen(this.getOrders());i++){
+			var order = this.getOrders()[i];
+			if(order.property == aliasedProperty && orderDirection == order.direction){
+				arrayDeleteAt(this.getOrders(),i);
+				break;
+			}
+		}
+	}
+
 	public void function addKeywordProperty(required string propertyIdentifier, required numeric weight) {		
 		var entityName = getBaseEntityName();
-		var propertyIsAttribute = getService("hibachiService").getHasAttributeByEntityNameAndPropertyIdentifier(entityName=entityName, propertyIdentifier=arguments.propertyIdentifier);
-		
+		try{
+			var propertyIsAttribute = getService("hibachiService").getHasAttributeByEntityNameAndPropertyIdentifier(entityName=entityName, propertyIdentifier=arguments.propertyIdentifier);
+		}catch(any e){
+			propertyIsAttribute = false;
+		}
 		if(propertyIsAttribute) {
 			
 			var lastEntityName = getService("hibachiService").getLastEntityNameInPropertyIdentifier( getBaseEntityName() , arguments.propertyIdentifier );
@@ -502,7 +524,7 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 			var aliasedProperty = getAliasedProperty(propertyIdentifier=idPropertyIdentifier);
 			
 			variables.attributeKeywordProperties[ aliasedProperty & ":" & listLast(arguments.propertyIdentifier, '.') ] = arguments.weight;
-		} else {
+		} else if(getService("hibachiService").getHasPropertyByEntityNameAndPropertyIdentifier( getBaseEntityName() , arguments.propertyIdentifier )){
 			var aliasedProperty = getAliasedProperty(propertyIdentifier=propertyIdentifier);
 			if(len(aliasedProperty)) {
 				variables.keywordProperties[aliasedProperty] = arguments.weight;
@@ -581,8 +603,13 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 	public string function getHQLWhere(boolean suppressWhere=false, searchOrder=false) {
 		var hqlWhere = "";
 		variables.hqlParams = {};
-		
-		
+						
+		// Add formatter based on dbtype
+ 		var formatter = '';
+ 		if(getHibachiScope().getApplicationValue("databaseType")=="Oracle10g"){
+ 			formatter = "LOWER";
+ 		}
+ 
 		// Loop over where groups
 		for(var i=1; i<=arrayLen(variables.whereGroups); i++) {
 			if( structCount(variables.whereGroups[i].filters) || structCount(variables.whereGroups[i].likeFilters) || structCount(variables.whereGroups[i].inFilters) || structCount(variables.whereGroups[i].ranges) ) {
@@ -606,6 +633,8 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 						for(var ii=1; ii<=listLen(variables.whereGroups[i].filters[filter], variables.valueDelimiter); ii++) {
 							if(listGetAt(variables.whereGroups[i].filters[filter], ii, variables.valueDelimiter) eq "NULL") {
 								hqlWhere &= " #filter# IS NULL OR";	
+							} else if(listGetAt(variables.whereGroups[i].filters[filter], ii, variables.valueDelimiter) eq "NOT NULL"){
+								hqlWhere &= " #filter# IS NOT NULL OR";
 							} else {
 								var paramID = "F#replace(filter, ".", "", "all")##i##ii#";
 								addHQLParam(paramID, listGetAt(variables.whereGroups[i].filters[filter], ii, variables.valueDelimiter));
@@ -616,6 +645,8 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 					} else {
 						if(variables.whereGroups[i].filters[filter] == "NULL") {
 							hqlWhere &= " #filter# IS NULL AND";
+						} else if(variables.whereGroups[i].filters[filter] == "NOT NULL"){
+							hqlWhere &= " #filter# IS NOT NULL AND";
 						} else {
 							var paramID = "F#replace(filter, ".", "", "all")##i#";
 							addHQLParam(paramID, variables.whereGroups[i].filters[filter]);
@@ -631,13 +662,13 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 						for(var ii=1; ii<=listLen(variables.whereGroups[i].likeFilters[likeFilter], variables.valueDelimiter); ii++) {
 							var paramID = "LF#replace(likeFilter, ".", "", "all")##i##ii#";
 							addHQLParam(paramID, lcase(listGetAt(variables.whereGroups[i].likeFilters[likeFilter], ii, variables.valueDelimiter)));
-							hqlWhere &= " LOWER(#likeFilter#) LIKE :#paramID# OR";
+							hqlWhere &= " #formatter#(#likeFilter#) LIKE :#paramID# OR";
 						}
 						hqlWhere = left(hqlWhere, len(hqlWhere)-2) & ") AND";
 					} else {
 						var paramID = "LF#replace(likeFilter, ".", "", "all")##i#";
 						addHQLParam(paramID, lcase(variables.whereGroups[i].likeFilters[likeFilter]));
-						hqlWhere &= " LOWER(#likeFilter#) LIKE :#paramID# AND";
+						hqlWhere &= " #formatter#(#likeFilter#) LIKE :#paramID# AND";
 					}
 				}
 				
@@ -709,7 +740,7 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 				hqlWhere &= " (";
 				for(var keywordProperty in variables.keywordProperties) {
 					
-					hqlWhere &= " LOWER(#keywordProperty#) LIKE :#paramID# OR";
+					hqlWhere &= " #formatter#(#keywordProperty#) LIKE :#paramID# OR";
 				}
 				
 				//Loop over all attributes and find any matches
@@ -766,16 +797,17 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		} else if (!structCount(variables.selects)) {
 			
 			var baseEntityObject = getService('hibachiService').getEntityObject( getBaseEntityName() );
-			
+			var direction = "ASC";			
 			if(structKeyExists(baseEntityObject.getThisMetaData(), "hb_defaultOrderProperty")) {
 				var obProperty = getAliasedProperty( baseEntityObject.getThisMetaData().hb_defaultOrderProperty );
 			} else if ( baseEntityObject.hasProperty( "createdDateTime" ) ) {
 				var obProperty = getAliasedProperty( "createdDateTime" );
+				direction = "DESC";
 			} else {
 				var obProperty = getAliasedProperty( getService("hibachiService").getPrimaryIDPropertyNameByEntityName( getBaseEntityName() ) );
 			}
 			
-			hqlOrder &= " ORDER BY #obProperty# ASC";
+			hqlOrder &= " ORDER BY #obProperty# #direction#";
 		}
 		
 		return hqlOrder;
@@ -801,22 +833,30 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		return variables.pageRecords;
 	}
 	
+	public any function getFirstRecord(boolean refresh=false) {
+		if( !structKeyExists(variables, "firstRecord") || arguments.refresh == true) {
+			saveState();
+			variables.firstRecord = ormExecuteQuery(getHQL(), getHQLParams(), true, {maxresults=1, ignoreCase="true", cacheable=getCacheable(), cachename="pageRecords-#getCacheName()#"});
+		}
+		return variables.firstRecord;
+	}
+	
 	public void function clearRecordsCount() {
 		structDelete(variables, "recordsCount");
 	}
 	
 	public numeric function getRecordsCount() {
 		if(!structKeyExists(variables, "recordsCount")) {
-			if(getCacheable() && structKeyExists(application.entitySmartList, getCacheName()) && structKeyExists(application.entitySmartList[getCacheName()], "recordsCount")) {
-				variables.recordsCount = application.entitySmartList[ getCacheName() ].recordsCount;
+			if(getCacheable() && structKeyExists(session.entitySmartList, getCacheName()) && structKeyExists(session.entitySmartList[getCacheName()], "recordsCount")) {
+				variables.recordsCount = session.entitySmartList[ getCacheName() ].recordsCount;
 			} else {
 				if(!structKeyExists(variables,"records")) {
 					var HQL = "#getHQLSelect(countOnly=true)##getHQLFrom(allowFetch=false)##getHQLWhere()#";
 					var recordCount = ormExecuteQuery(HQL, getHQLParams(), true, {ignoreCase="true"});
 					variables.recordsCount = recordCount;
 					if(getCacheable()) {
-						application.entitySmartList[ getCacheName() ] = {};
-						application.entitySmartList[ getCacheName() ].recordsCount = variables.recordsCount;
+						session.entitySmartList[ getCacheName() ] = {};
+						session.entitySmartList[ getCacheName() ].recordsCount = variables.recordsCount;
 					}
 				} else {
 					variables.recordsCount = arrayLen(getRecords());	
@@ -970,9 +1010,17 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		return exists;
 	}
 	
-	public array function getFilterOptions(required string valuePropertyIdentifier, required string namePropertyIdentifier) {
+	public array function getFilterOptions(
+		required string valuePropertyIdentifier, 
+		required string namePropertyIdentifier,
+		string parentPropertyIdentifier
+	) {
 		var nameProperty = getAliasedProperty(propertyIdentifier=arguments.namePropertyIdentifier);
 		var valueProperty = getAliasedProperty(propertyIdentifier=arguments.valuePropertyIdentifier);
+		
+		if(structKeyExists(arguments,'parentPropertyIdentifier')){
+			 var parentProperty = getAliasedProperty(propertyIdentifier=arguments.parentPropertyIdentifier);
+		}
 		
 		var originalWhereGroup = duplicate(variables.whereGroups);
 		
@@ -984,21 +1032,34 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 			}
 		}
 			
-		var results = ormExecuteQuery("SELECT NEW MAP(
+		var hql = "SELECT NEW MAP(
 			#nameProperty# as name,
 			#valueProperty# as value,
 			count(#nameProperty#) as count
-			)
-		#getHQLFrom(allowFetch=false)#
-		#getHQLWhere()# #IIF(len(getHQLWhere()), DE('AND'), DE('WHERE'))#
+			";
+		
+		if(structKeyExists(arguments,'parentPropertyIdentifier')){
+			hql &= ", #parentProperty# as parentValue";
+		}
+		hql &=")";
+		
+		hql &="#getHQLFrom(allowFetch=false)#
+		#getHQLWhere()# #getHibachiScope().getService('hibachiUtilityService').hibachiTernary(len(getHQLWhere()), 'AND', 'WHERE')#
 				#nameProperty# IS NOT NULL
 			AND
 				#valueProperty# IS NOT NULL
 		GROUP BY
 			#nameProperty#,
-			#valueProperty#
+			#valueProperty#";
+			
+		if(structKeyExists(arguments,'parentPropertyIdentifier')){
+			hql &= ", #parentProperty#";
+		}
+			
+		hql &= "
 		ORDER BY
-			#nameProperty# ASC", getHQLParams());
+			#nameProperty# ASC";
+		var results = ormExecuteQuery(hql, getHQLParams());
 		
 		variables.whereGroups = originalWhereGroup;
 		
@@ -1036,8 +1097,9 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 	public void function loadSavedState(required string savedStateID) {
 		var savedStates = [];
 		if(getHibachiScope().hasSessionValue('smartListSavedState')) {
-			savedStates = getHibachiScope().getSessionValue('smartListSavedState');	
+			savedStates = getHibachiScope().getSessionValue('smartListSavedState');
 		}
+		
 		for(var s=1; s<=arrayLen(savedStates); s++) {
 			if(savedStates[s].savedStateID eq arguments.savedStateID) {
 				for(var key in savedStates[s]) {
@@ -1052,7 +1114,7 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		if(!getHibachiScope().hasSessionValue('smartListSavedState')) {
 			getHibachiScope().setSessionValue('smartListSavedState', []);
 		}
-		
+
 		var sessionKey = "";
 		if(structKeyExists(COOKIE, "JSESSIONID")) {
 			sessionKey = COOKIE.JSESSIONID;
@@ -1061,31 +1123,31 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		} else if (structKeyExists(COOKIE, "CFID")) {
 			sessionKey = COOKIE.CFID;
 		}
-		
+
 		// Lock the session so that we can manipulate based on saved state
 		lock name="#sessionKey#_#getHibachiInstanceApplicationScopeKey()#_smartListSavedStateUpdateLogic" timeout="10" {
-		
+
 			// Get the saved state struct
 			var states = getHibachiScope().getSessionValue('smartListSavedState');
-			
-			// Setup the state
-			var state = getStateStruct();
-			state.savedStateID = getSavedStateID();
-			
-			// If the savedState already existed, then delete it
-			for(var e=1; e<=arrayLen(states); e++) {
-				if(states[e].savedStateID eq state.savedStateID) {
-					arrayDeleteAt(states, e);
-				}
+
+		// Setup the state
+		var state = getStateStruct();
+		state.savedStateID = getSavedStateID();
+		
+		// If the savedState already existed, then delete it
+		for(var e=1; e<=arrayLen(states); e++) {
+			if(states[e].savedStateID eq state.savedStateID) {
+				arrayDeleteAt(states, e);
 			}
+		}
+		
+		// Add the state to the states array
+		arrayPrepend(states, state);
 			
-			// Add the state to the states array
-			arrayPrepend(states, state);
-				
-			for(var s=arrayLen(states); s>30; s--) {
-				arrayDeleteAt(states, s);
-			}
-			
+		for(var s=arrayLen(states); s>30; s--) {
+			arrayDeleteAt(states, s);
+		}
+		
 			getHibachiScope().setSessionValue('smartListSavedState', states);
 		}
 	}
@@ -1126,4 +1188,4 @@ component accessors="true" persistent="false" output="false" extends="HibachiObj
 		// Turn the array back into a list, lcase, and hash for the name
 		return hash(lcase(arrayToList(valueArray,",")));
 	}
-}
+	}

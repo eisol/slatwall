@@ -40,9 +40,9 @@ component displayname="ProductSchedule" entityname="SlatwallProductSchedule" tab
 
 	// Persistent Properties
 	property name="productScheduleID" ormtype="string" length="32" fieldtype="id" generator="uuid" unsavedvalue="" default="";
-	property name="recurringTimeUnit" ormtype="string" hint="Daily, Weekly, Monthly, Yearly";
-	property name="weeklyRepeatDays" ormtype="string" hint="List containing days of the week on which the schedule occurs.";
-	property name="monthlyRepeatByType" ormtype="string" hint="Whether recurrence is repeated based on day of month or day of week.";
+	property name="recurringTimeUnit" ormtype="string" hb_formFieldType="select" hint="Daily, Weekly, Monthly, Yearly";
+	property name="weeklyRepeatDays" ormtype="string" hb_formFieldType="select" hint="List containing days of the week on which the schedule occurs.";
+	property name="monthlyRepeatByType" ormtype="string" hb_formFieldType="select" hint="Whether recurrence is repeated based on day of month or day of week.";
 	property name="scheduleEndDate" ormtype="timestamp" hb_formFieldType="date" hint="If endsOn=date this will be the date the schedule ends";
 
 	// Calculated Properties
@@ -69,7 +69,19 @@ component displayname="ProductSchedule" entityname="SlatwallProductSchedule" tab
 	// Non-Persistent Properties
 	property name="firstScheduledSku" persistent="false";
 	property name="scheduleSummary" persistent="false";
+	property name="scheduleStartDate" persistent="false";
 
+	public array function getRecurringTimeUnitOptions() {
+		return getService("ProductScheduleService").getRecurringTimeUnitOptions();
+	}
+
+	public array function getWeeklyRepeatDaysOptions() {
+		return getService("ProductScheduleService").getWeeklyRepeatDaysOptions();
+	}
+
+	public array function getMonthlyRepeatByTypeOptions() {
+		return getService("ProductScheduleService").getMonthlyRepeatByTypeOptions();
+	}
 
 	// @help Returns text summary of a weekly schedule. Used by getScheduleSummary().
 	private string function getWeeklySummary() {
@@ -139,9 +151,13 @@ component displayname="ProductSchedule" entityname="SlatwallProductSchedule" tab
 
 	public any function getFirstScheduledSku() {
 		if(!structKeyExists(variables,"firstScheduledSku")) {
-			variables.firstScheduledSku = this.getSkus()[1];
+			variables.firstScheduledSku = this.getService("ProductScheduleService").getFirstScheduledSku(this.getProductScheduleID());
 		}
 		return variables.firstScheduledSku;
+	}
+	
+	public string function getScheduleStartDate(){
+		return '#dateFormat(getFirstScheduledSku().getEventStartDateTime(), "medium")# #timeFormat(getFirstScheduledSku().getEventStartDateTime(), "short")#';
 	}
 
 	// ============  END:  Non-Persistent Property Methods =================
@@ -176,8 +192,8 @@ component displayname="ProductSchedule" entityname="SlatwallProductSchedule" tab
 
 	// ================== START: Overridden Methods ========================
 
-	public string function getSimpleRepresentationPropertyName() {
-		return "productScheduleID";
+	public string function getSimpleRepresentation() {
+		return getScheduleSummary();
 	}
 
 	// ==================  END:  Overridden Methods ========================

@@ -3,21 +3,49 @@
 	<cfproperty name="hibachiTagService" type="any" />
 
 	<cfscript>
-
-		//antisamy setup
-		variables.antisamyConfig = {
-			policyFile = ExpandPath("org/Hibachi/antisamy/antisamy-slashdot-1.4.1.xml"),
-			jarArray = [
-				ExpandPath("/Slatwall/org/Hibachi/antisamy/lib/antisamy-bin.1.4.1.jar"),
-				ExpandPath("/Slatwall/org/Hibachi/antisamy/lib/antisamy-required-libs/batik-css.jar"),
-				ExpandPath("/Slatwall/org/Hibachi/antisamy/lib/antisamy-required-libs/batik-util.jar"),
-				ExpandPath("/Slatwall/org/Hibachi/antisamy/lib/antisamy-required-libs/nekohtml.jar"),
-				ExpandPath("/Slatwall/org/Hibachi/antisamy/lib/antisamy-required-libs/xercesImpl.jar")
-			]
-		};
-		variables.antisamyConfig.classLoader = CreateObject("component", "Slatwall.org.Hibachi.antisamy.lib.javaloader.JavaLoader").init(variables.antisamyConfig.jarArray);
-		variables.antiSamy = variables.antisamyConfig.classLoader.create("org.owasp.validator.html.AntiSamy").init();
-
+		
+		public function formatStructKeyList(required string str){
+ 		    if (!structKeyExists(server, "lucee")){
+ 		        return str;
+ 		    }
+ 		    var formattedStructKeyList = '';
+ 		    var strArray = listToArray(str, '.');
+ 		    for( var key in strArray){
+ 		        if(isNumeric(left(key, 1))){
+ 		            formattedStructKeyList &= "['#key#']";
+ 		        }else{
+ 		            formattedStructKeyList = listAppend(formattedStructKeyList, key, '.');
+ 		        }
+ 		    };
+ 		    return formattedStructKeyList;
+ 		}	
+ 		
+ 		public any function getQueryLabels(required any query){
+ 			var qryColumns = "";
+ 			for (var column in getMetaData(arguments.query)){
+ 				qryColumns = listAppend(qryColumns, column.name);
+ 			}
+ 			return local.qryColumns;
+ 		}
+ 		
+		public any function precisionCalculate(required numeric value, numeric scale=2){
+			var roundingmode = createObject('java','java.math.RoundingMode');
+			return javacast('bigdecimal',arguments.value).setScale(arguments.scale,roundingmode.HALF_EVEN);
+		}
+		
+		public string function lowerCaseToTitleCase(required string stringValue){
+			return REReplace(arguments.stringValue, "\b(\S)(\S*)\b", "\u\1\L\2", "all");
+		}
+		
+		public string function snakeCaseToTitleCase(required string stringValue){
+			arguments.stringValue = REReplace(stringValue,'-',' ','all');
+			return lowerCaseToTitleCase(arguments.stringValue);
+		}
+		
+		public string function camelCaseToTitleCase(required string stringValue){
+			return rereplace(rereplace(arguments.stringValue,"(^[a-z])","\u\1"),"([A-Z])"," \1","all");
+		}
+		
 		/**
 		* Sorts an array of structures based on a key in the structures.
 		*
@@ -30,21 +58,23 @@
 		* @author Nathan Dintenfass (nathan@changemedia.com)
 		* @version 1, December 10, 2001
 		*/
-		public function arrayOfStructsSort(aOfS,key){
-		        //by default we'll use an ascending sort
-		        var sortOrder = "asc";        
+		public array function arrayOfStructsSort(aOfS,key,sortOrder2="des"){
+
+
 		        //by default, we'll use a textnocase sort
 		        var sortType = "textnocase";
 		        //by default, use ascii character 30 as the delim
 		        var delim = ".";
 		        //make an array to hold the sort stuff
 		        var sortArray = arraynew(1);
+
 		        //make an array to return
 		        var returnArray = arraynew(1);
+
 		        //grab the number of elements in the array (used in the loops)
 		        var count = arrayLen(aOfS);
 		        //make a variable to use in the loop
-		        var ii = 1;
+		        var ii = 1; var j=1;
 		        //if there is a 3rd argument, set the sortOrder
 		        if(arraylen(arguments) GT 2)
 		            sortOrder = arguments[3];
@@ -58,12 +88,34 @@
 		        for(ii = 1; ii lte count; ii = ii + 1)
 		            sortArray[ii] = aOfS[ii][key] & delim & ii;
 		        //now sort the array
-		        arraySort(sortArray,sortType,sortOrder);
+		        arraySort(sortArray,sortType,arguments.sortOrder2);
 		        //now build the return array
 		        for(ii = 1; ii lte count; ii = ii + 1)
 		            returnArray[ii] = aOfS[listLast(sortArray[ii],delim)];
 		        //return the array
 		        return returnArray;
+		}
+
+		public boolean function isInThread(){
+			//java 8
+			try{
+				var ThreadAPI = createObject("java","java.lang.Thread");
+			//java 7
+			}catch(any e){
+				var ThreadAPI = createObject("java","java.lang.thread");
+			}
+
+
+			var currentThread = ThreadAPI.currentThread();
+
+			return currentThread.getThreadGroup().getName() == "cfthread";
+		}
+
+		public string function obfuscateValue(required string value){
+			if(len(value)){
+				return lcase(rereplace(CreateUUID(), '[^A-Z]', '', 'ALL'));
+			}
+			return '';
 		}
 
 		// @hint this method will sanitize a struct of data
@@ -77,10 +129,20 @@
 
 		// @hint this method allows you to properly format a value against a formatType
 		public any function formatValue( required string value, required string formatType, struct formatDetails={} ) {
-			if(listFindNoCase("currency,date,datetime,pixels,percentage,second,time,truefalse,url,weight,yesno,urltitle,alphanumericdash", arguments.formatType)) {
+
+			if(listFindNoCase("decimal,currency,date,datetime,pixels,percentage,second,time,truefalse,url,weight,yesno,urltitle,alphanumericdash", arguments.formatType)) {
 				return this.invokeMethod("formatValue_#arguments.formatType#", {value=arguments.value, formatDetails=arguments.formatDetails});
 			}
 			return arguments.value;
+		}
+
+		public any function formatValue_decimal(required string value){
+			if(isNumeric(arguments.value)){
+				return numberFormat(arguments.value,'_.__');	
+			}else{
+				//used in cases such as string "N/A"
+				return arguments.value;				
+			}
 		}
 
 		public any function formatValue_second( required string value, struct formatDetails={} ) {
@@ -138,35 +200,67 @@
 		public any function formatValue_url( required string value, struct formatDetails={} ) {
 			return '<a href="#arguments.value#" target="_blank">' & arguments.value & '</a>';
 		}
-		
+
 		public any function formatValue_urltitle( required string value, struct formatDetails={} ) {
 			return createUniqueURLTitle(arguments.value, arguments.formatDetails.tableName);
 		}
-		
+
 		public any function formatValue_alphanumericdash( required string value, struct formatDetails={} ) {
-			return createSEOString(arguments.data.value); 
+			return createSEOString(arguments.data.value);
 		}
-		
-		public string function createUniqueURLTitle(required string titleString, required string tableName) {
-			return createUniqueColumn(arguments.titleString,arguments.tableName,'urlTitle');
+
+		public string function createUniqueURLTitle(required string titleString, string tableName="", string entityName="") {
+			if(len(arguments.tableName)){
+				return createUniqueColumn(arguments.titleString,arguments.tableName,'urlTitle');	
+			}else if(len(arguments.entityName)){
+				return createUniqueProperty(arguments);				
+			}
 		}
-		
+
 		public string function createUniqueColumn(required string titleString, required string tableName, required string columnName) {
-	
-			var addon = 1;
-	
+
+			var addon = 0;
+
 			var urlTitle = createSEOString(arguments.titleString);
-	
+
 			var returnTitle = urlTitle;
-	
+
 			var unique = getHibachiDAO().verifyUniqueTableValue(tableName=arguments.tableName, column=arguments.columnName, value=returnTitle);
-	
+
+			while(!unique) {
+				addon++;
+				//check to inc the addon.
+				var idx = len(addon)+1;//+1 for dash
+				if (right(returnTitle, idx) == "-#addon#"){
+					addon++;
+					//increase the addon index and then replace the last two chars instead of appending.
+					var removedLast = Left(returnTitle, len(returnTitle)-idx);
+					returnTitle = "#removedLast#-#addon#";
+				}else{
+					returnTitle = "#urlTitle#-#addon#";	
+				}
+				
+				unique = getHibachiDAO().verifyUniqueTableValue(tableName=arguments.tableName, column=arguments.columnName, value=returnTitle);
+			}
+
+			return returnTitle;
+		}
+		
+		public string function createUniqueProperty(required string titleString, required string entityName, required string propertyName){
+			var addon = 0;
+
+			var urlTitle = createSEOString(arguments.titleString);
+
+			var returnTitle = urlTitle;
+
+			var unique = getHibachiDAO().verifyUniquePropertyValue(entityName=arguments.entityName, propertyName=arguments.propertyName, value=returnTitle);
+
 			while(!unique) {
 				addon++;
 				returnTitle = "#urlTitle#-#addon#";
-				unique = getHibachiDAO().verifyUniqueTableValue(tableName=arguments.tableName, column=arguments.columnName, value=returnTitle);
+				unique = getHibachiDAO().verifyUniquePropertyValue(entityName=arguments.entityName, propertyName=arguments.propertyName, value=returnTitle);
 			}
-	
+
 			return returnTitle;
 		}
 
@@ -183,6 +277,24 @@
 
 			return result.toString().toUppercase();
   		}
+
+  		public any function hibachiTernary(required any condition, required any expression1, required any expression2){
+  			return (arguments.condition) ? arguments.expression1 : arguments.expression2;
+  		}
+
+	  	/**
+	    * Returns a URI that can be used in a QR code with a multi factor authenticator app implementations
+	    * Resources: 
+	    * 	https://github.com/google/google-authenticator/wiki/Conflicting-Accounts
+	    * 	https://github.com/google/google-authenticator/wiki/Key-Uri-Format
+	    *
+	    * @param email the email address of the user account
+	    * @param key the Base32 encoded secret key to use in the code
+	    */
+	    public string function buildOTPUri(required string email, required string secretKey)
+	    {
+	        return "otpauth://totp/#getApplicationValue('applicationKey')#:#arguments.email#?secret=#arguments.secretKey#&issuer=#getApplicationValue('applicationKey')#";
+	    }
 
 		public any function buildPropertyIdentifierListDataStruct(required any object, required string propertyIdentifierList, required string availablePropertyIdentifierList) {
 			var responseData = {};
@@ -202,6 +314,7 @@
 				return;
 			}
 			var object = parentObject.invokeMethod("get#listFirst(arguments.propertyIdentifier, '.')#");
+
 			if(!isNull(object) && isObject(object)) {
 				var thisProperty = listFirst(arguments.propertyIdentifier, '.');
 				param name="data[thisProperty]" default="#structNew()#";
@@ -222,8 +335,12 @@
 
 					if(!structKeyExists(data[thisProperty][i],"errors")) {
 						// add error messages
-						data[thisProperty][i]["hasErrors"] = object[i].hasErrors();
-						data[thisProperty][i]["errors"] = object[i].getErrors();
+						try{
+							data[thisProperty][i]["hasErrors"] = object[i].hasErrors();
+							data[thisProperty][i]["errors"] = object[i].getErrors();
+							}catch(any e){
+								writeDump(var=object[i],top=1);abort;
+							}
 					}
 
 					buildPropertyIdentifierDataStruct(object[i],listDeleteAt(arguments.propertyIdentifier, 1, "."), data[thisProperty][i]);
@@ -251,10 +368,13 @@
 			return arguments.data;
 		}
 		//evaluate double brackets ${{}} and ${()}
-		public string function replaceStringEvaluateTemplate(required string template){
+		public string function replaceStringEvaluateTemplate(required string template, any object){
+			if(isNull(arguments.object)){
+				arguments.object = getHibachiScope();
+			}
 			var templateKeys = reMatchNoCase("\${{[^}]+}}",arguments.template);
-			var parenthesisTemplateKeys =  reMatchNoCase("\${\([^}]+\)}",arguments.template);
 
+			var parenthesisTemplateKeys =  reMatchNoCase("\${\([^}]+\)}",arguments.template);
 			var replacementArray = [];
 			var returnString = arguments.template;
 
@@ -264,8 +384,12 @@
 				replaceDetails.value = templateKeys[i];
 
 				var valueKey = replace(replace(templateKeys[i], "${{", ""),"}}","");
-
-				replaceDetails.value = evaluate(valueKey);
+				//check to see if a function exists on the object
+			    if(structKeyExists(arguments.object, ListFirst(valueKey,"("))){
+					replaceDetails.value = evaluate("arguments.object.#valueKey#");
+			    } else {
+                    replaceDetails.value = evaluate(valueKey);
+                }
 				arrayAppend(replacementArray, replaceDetails);
 			}
 
@@ -277,6 +401,7 @@
 				var valueKey = replace(replace(parenthesisTemplateKeys[i], "${(", ""),")}","");
 
 				replaceDetails.value = evaluate(valueKey);
+
 				arrayAppend(replacementArray, replaceDetails);
 			}
 
@@ -291,9 +416,20 @@
 
 			return returnString;
 		}
+
+		public array function getTemplateKeys(required string template){
+			//matches only ${} not ${{}}
+			return reMatchNoCase("\${[^{(}]+}",arguments.template);
+		}
+
+		public boolean function isStringTemplate(required string value){
+			return arraylen(getTemplateKeys(value));
+		}
+
 		//replace single brackets ${}
 		public string function replaceStringTemplate(required string template, required any object, boolean formatValues=false, boolean removeMissingKeys=false) {
-			var templateKeys = reMatchNoCase("\${[^}]+}",arguments.template);
+
+			var templateKeys = getTemplateKeys(arguments.template);
 			var replacementArray = [];
 			var returnString = arguments.template;
 			for(var i=1; i<=arrayLen(templateKeys); i++) {
@@ -304,7 +440,27 @@
 				var valueKey = replace(replace(templateKeys[i], "${", ""),"}","");
 				if( isStruct(arguments.object) && structKeyExists(arguments.object, valueKey) ) {
 					replaceDetails.value = arguments.object[ valueKey ];
-				} else if (isObject(arguments.object)) {
+				} else if (isObject(arguments.object) &&
+					(
+						(
+							arguments.object.isPersistent() && getHasPropertyByEntityNameAndPropertyIdentifier(arguments.object.getEntityName(), valueKey)
+						)
+						||
+						(
+							arguments.object.isPersistent()
+							&& structKeyExists(getService('hibachiService'),'getHasAttributeByEntityNameAndPropertyIdentifier')
+							&& getService('hibachiService').getHasAttributeByEntityNameAndPropertyIdentifier(arguments.object.getEntityName(), valueKey)
+						)
+						||
+						(
+							!arguments.object.isPersistent() && arguments.object.hasPropertyByPropertyIdentifier(valueKey)
+						)
+						||
+						(
+							!arguments.object.isPersistent() && arguments.object.hasProperty(valueKey)
+						)
+					)
+				) {
 					replaceDetails.value = arguments.object.getValueByPropertyIdentifier(valueKey, arguments.formatValues);
 				} else if (arguments.removeMissingKeys) {
 					replaceDetails.value = '';
@@ -315,7 +471,10 @@
 			for(var i=1; i<=arrayLen(replacementArray); i++) {
 				returnString = replace(returnString, replacementArray[i].key, replacementArray[i].value, "all");
 			}
-			if(arraylen(reMatchNoCase("\${[^}]+}",returnString))){
+			if(
+				arguments.template != returnString
+				&& arraylen(getTemplateKeys(returnString))
+			){
 				returnString = replaceStringTemplate(returnString, arguments.object, arguments.formatValues,arguments.removeMissingKeys);
 			}
 
@@ -348,6 +507,19 @@
 		        newArr[arrayLen(a1)+i] = a2[i];
 		    }
 		    return newArr;
+		}
+		
+		//name value pair string to struct. Separates url string by & ampersand
+		public struct function convertNVPStringToStruct( required string data ) {
+			if(left(arguments.data,1) == '?'){
+				arguments.data = right(arguments.data,len(arguments.data)-1);
+			}
+			var returnStruct = {};
+			var ampArray = listToArray(arguments.data, "&");
+			for(var i=1; i<=arrayLen(ampArray); i++) {
+				returnStruct[ listFirst(ampArray[i], "=") ] = listLast(ampArray[i], "=");
+			}
+			return returnStruct;
 		}
 
 		public string function filterFilename(required string filename) {
@@ -448,14 +620,41 @@
 		}
 
 		// helper method for downloading a file
-		public void function downloadFile(required string fileName, required string filePath, string fileType="", string contentType = 'application/unknown', boolean deleteFile = false) {
-			getHibachiTagService().cfheader(name="Content-Disposition", value="inline; filename=#arguments.fileName#.#arguments.fileType#");
+		public void function downloadFile(required string fileName, required string filePath, string contentType = 'application/unknown', boolean deleteFile = false) {
+			getHibachiTagService().cfheader(name="Content-Disposition", value="attachment; filename=""#arguments.fileName#""");
 			getHibachiTagService().cfcontent(type="#arguments.contentType#", file="#arguments.filePath#", deletefile="#arguments.deleteFile#");
 		}
 
+		public string function getIdentityHashCode(required any value) {
+			return createObject("java","java.lang.System").identityHashCode(arguments.value);
+		}
+
 		public string function encryptValue(required string value, string salt="") {
-			var passwords = getEncryptionPasswordArray();
-			return encrypt(arguments.value, generatePasswordBasedEncryptionKey(password=passwords[1].password, salt=arguments.salt, iterationCount=passwords[1].iterationCount), getEncryptionAlgorithm(), getEncryptionEncoding());
+			if(len(arguments.value)){
+				var passwords = getEncryptionPasswordArray();
+				return encrypt(arguments.value, generatePasswordBasedEncryptionKey(password=passwords[1].password, salt=arguments.salt, iterationCount=passwords[1].iterationCount), getEncryptionAlgorithm(), getEncryptionEncoding());				
+			}
+		}
+
+		public string function hibachiHTMLEditFormat(required any html=""){
+			//If its something that can be turned into a string, make sure its a string.
+			if (isSimpleValue(arguments.html)){
+				arguments.html = "#arguments.html#";
+			//Otherwise, it can't be passed into htmlEditFormat
+			}else{
+				return "";
+			}
+			if(structKeyExists(server,"railo") || structKeyExists(server,'lucee')) {
+				var sanitizedString = htmlEditFormat(arguments.html);
+			}else{
+				var sanitizedString = encodeForHTML(arguments.html);	
+			}
+			sanitizedString = sanitizeForAngular(sanitizedString);
+			return sanitizedString;
+		}
+
+		public string function sanitizeForAngular(required string html){
+			return ReReplace(arguments.html,'{',chr(123)&chr(002),'all');
 		}
 
 		public string function decryptValue(required string value, string salt="") {
@@ -691,6 +890,7 @@
 
 			var passwordsJSON = serializeJSON({'passwords'=arguments.encryptionPasswordArray});
 			fileWrite(getEncryptionPasswordFilePath(), encrypt(passwordsJSON, hardCodedFileEncryptionKey, "AES/CBC/PKCS5Padding"));
+			logHibachi("Encryption key file updated", true);
 		}
 
 		private any function readEncryptionPasswordFile() {
@@ -708,10 +908,10 @@
 
 			return arguments.data;
 		}
-		
+
 		public any function getLineBreakByEnvironment(required string environmentName){
 			var linebreak = "";
-			
+
 			if ( findNoCase('windows', arguments.environmentName) ){
 				linebreak =  Chr(13) & Chr(10);
 			}else if (findNoCase('mac', arguments.environmentName) ){
@@ -721,10 +921,65 @@
 			}else {
 				linebreak = CreateObject("java", "java.lang.System").getProperty("line.separator");
 			}
-			
+
 			return linebreak;
 		}
-			
+
+		public string function trimList(required string originalList, string delimiter = ","){
+			return REReplace(trim(originalList),"\s*#delimiter#\s*",delimiter,"ALL");
+		}
+
+
+		public void function queryToCsvFile(required string filePath, required query queryData, boolean includeHeaderRow = true, string delimiter = ",", string columnNames = "", string columnTitles = ""){
+
+			var newLine     = (chr(13) & chr(10));
+			var buffer      = CreateObject('java','java.lang.StringBuffer').Init();
+
+			if(!listLen(arguments.columnNames)){
+				arguments.columnNames = arguments.queryData.columnlist;
+			}
+
+			if(!listLen(arguments.columnTitles)){
+				arguments.columnTitles = arguments.columnNames;
+			}
+
+			// Check if we should include a header row
+			if(arguments.includeHeaderRow){
+				//Create the file with the headers
+				fileWrite(arguments.filePath,"#ListQualify(arguments.columnTitles,'"',',','all')##newLine#");
+			}else{
+				//Create the file
+				fileWrite(arguments.filePath,"");
+			}
+
+			var colArray = listToArray(arguments.columnNames);
+			var dataFile = fileOpen(filePath,"append");
+
+			// Loop over query and build csv rows
+			for(var i=1; i <= arguments.queryData.recordcount; i++){
+				// this individual row
+				var thisRow = [];
+				// loop over column list
+				for(var j=1; j <= arrayLen(colArray); j=j+1){
+					// create our row
+					thisRow[j] = replace( replace( arguments.queryData[colArray[j]][i],',','','all'),'"','""','all' );
+				}
+				// Append new row to csv output
+				buffer.append(JavaCast('string', (ArrayToList(thisRow, arguments.delimiter))));
+				if(i mod 1000 EQ 0){
+					fileWriteLine(dataFile,buffer.toString());
+					buffer.setLength(0);
+				}else{
+					buffer.append(JavaCast('string', newLine));
+				}
+			}
+			if(buffer.length()){
+				fileWriteLine(dataFile,buffer.toString());
+				buffer.setLength(0);
+			}
+			fileClose(dataFile);
+		};
+
 	</cfscript>
 
 	<cffunction name="logException" returntype="void" access="public">
@@ -759,14 +1014,14 @@
 		<cfargument name="templatePath" default="" />
 		<cfargument name="logType" default="Information" /><!--- Information  |  Error  |  Fatal  |  Warning  --->
 		<cfargument name="generalLog" type="boolean" default="false" />
-		
+
 		<cfif getHibachiScope().setting("globalLogMessages") neq "none" and (getHibachiScope().setting("globalLogMessages") eq "detail" or arguments.generalLog)>
 			<cfif generalLog>
 				<cfset var logText = "General Log" />
 			<cfelse>
 				<cfset var logText = "Detail Log" />
 			</cfif>
-			
+
 			<cfif arguments.messageType neq "" and isSimpleValue(arguments.messageType)>
 				<cfset logText &= " - #arguments.messageType#" />
 			</cfif>
@@ -779,16 +1034,16 @@
 			<cfif arguments.message neq "" and isSimpleValue(arguments.message)>
 				<cfset logText &= " - #arguments.message#" />
 			</cfif>
-			
+
 			<!--- Verify that the log type was correct --->
 			<cfif not ListFind("Information,Error,Fatal,Warning", arguments.logType)>
 				<cfset logMessage(messageType="Internal Error", messageCode = "500", message="The Log type that was attempted was not valid", logType="Warning") />
 				<cfset arguments.logType = "Information" />
 			</cfif>
-			
+
 			<cflog file="#getApplicationValue('applicationKey')#" text="#logText#" type="#arguments.logType#" />
 		</cfif>
-		
+
 	</cffunction>
 
 	<cffunction name="compareLists" access="public" returntype="struct" output="false" hint="Given two versions of a list, I return a struct containing the values that were added, the values that were removed, and the values that stayed the same.">
@@ -1065,12 +1320,124 @@
 	    <!--- Return the CSV value. --->
 	    <cfreturn LOCAL.Buffer.ToString() />
 	</cffunction>
-	
+
 	<cffunction name="getCurrentUtcTime" returntype="Numeric" >
         <cfset local.currentDate = Now()>
         <cfset local.utcDate = dateConvert( "local2utc", local.currentDate )>
         <cfreturn round( local.utcDate.getTime() / 1000 )>
     </cffunction>
 
+    <cffunction name="convertBase64GIFToBase64PDF">
+    	<cfargument name="base64GIF" />
+    	<cfset var myImage = ImageReadBase64("data:image/gif;base64,#arguments.base64GIF#")>
+    	<cfset var tempDirectory = getTempDirectory()&'/newimage.gif'>
+    	<cfset imageWrite(myImage,tempDirectory)>
+		<cfdocument name="local.newpdf" format="pdf" localUrl="yes">
+			<cfoutput>
+				<img src="file:///#tempDirectory#" />
+			</cfoutput>
+		</cfdocument>
+		<cfreturn ToBase64(newpdf) />
+    </cffunction>
+
+	
+	<cffunction name="HMAC_SHA1" returntype="binary" access="private" output="false" hint="NSA SHA-1 Algorithm">
+		<cfargument name="signKey" type="string" required="true" />
+		<cfargument name="signMessage" type="string" required="true" />
+
+		<cfset var jMsg = JavaCast("string",arguments.signMessage).getBytes("iso-8859-1") />
+		<cfset var jKey = JavaCast("string",arguments.signKey).getBytes("iso-8859-1") />
+		<cfset var key = createObject("java","javax.crypto.spec.SecretKeySpec") />
+		<cfset var mac = createObject("java","javax.crypto.Mac") />
+
+		<cfset key = key.init(jKey,"HmacSHA1") />
+		<cfset mac = mac.getInstance(key.getAlgorithm()) />
+		<cfset mac.init(key) />
+		<cfset mac.update(jMsg) />
+
+		<cfreturn mac.doFinal() />
+	</cffunction>
+
+	<cffunction name="HMAC_SHA256" returntype="binary" access="public" output="false">
+		<cfargument name="signKey" type="string" required="true" />
+		<cfargument name="signMessage" type="string" required="true" />
+
+		<cfset var jMsg = JavaCast("string",arguments.signMessage).getBytes("iso-8859-1") />
+		<cfset var jKey = JavaCast("string",arguments.signKey).getBytes("iso-8859-1") />
+
+		<cfset var key = createObject("java","javax.crypto.spec.SecretKeySpec") />
+		<cfset var mac = createObject("java","javax.crypto.Mac") />
+
+		<cfset key = key.init(jKey,"HmacSHA256") />
+
+		<cfset mac = mac.getInstance(key.getAlgorithm()) />
+		<cfset mac.init(key) />
+		<cfset mac.update(jMsg) />
+
+		<cfreturn mac.doFinal() />
+
+	</cffunction>
+
+	<cffunction name="createS3Signature" returntype="string" access="public" output="false">
+		<cfargument name="stringToSign" type="string" required="true" />
+		<cfargument name="awsSecretAccessKey" type="string" required="true">
+		
+		<!--- Replace "\n" with "chr(10)" to get a correct digest --->
+		<cfset var fixedData = replace(arguments.stringToSign,"\n","#chr(10)#","all")>
+		<!--- Calculate the hash of the information --->
+		<cfset var digest = HMAC_SHA1(awsSecretAccessKey,fixedData)>
+		<!--- fix the returned data to be a proper signature --->
+		<cfset var signature = ToBase64("#digest#")>
+		
+		<cfreturn signature>
+	</cffunction>
+
+	<cffunction name="uploadToS3" access="public" output="false" returntype="boolean"
+					description="Puts an object into a bucket.">
+		<cfargument name="bucketName" type="string" required="true">
+		<cfargument name="fileName" type="string" required="true">
+		<cfargument name="contentType" type="string" required="true">
+		<cfargument name="awsAccessKeyId" type="string" required="true">
+		<cfargument name="awsSecretAccessKey" type="string" required="true">
+		<cfargument name="uploadDir" type="string" required="false" default="#ExpandPath('./')#">
+		<cfargument name="HTTPtimeout" type="numeric" required="false" default="300">
+		<cfargument name="cacheControl" type="boolean" required="false" default="true">
+		<cfargument name="cacheDays" type="numeric" required="false" default="30">
+		<cfargument name="acl" type="string" required="false" default="public-read">
+		<cfargument name="storageClass" type="string" required="false" default="STANDARD">
+		<cfargument name="keyName" type="string" required="false">
+		
+		<cfset var versionID = "">
+		<cfset var binaryFileData = "">
+		<cfset var dateTimeString = GetHTTPTimeString(Now())>
+		<cfset var cs = "">
+		<cfset var signature = "">
+		
+		<cfif !structKeyExists(arguments, "keyName") or not compare(arguments.keyName, '')>
+			<cfset arguments.keyName = arguments.fileName>
+		</cfif>
+
+		<!--- Create a canonical string to send --->
+		<cfset cs = "PUT\n\n#arguments.contentType#\n#dateTimeString#\nx-amz-acl:#arguments.acl#\nx-amz-storage-class:#arguments.storageClass#\n/#arguments.bucketName#/#arguments.keyName#">
+		
+		<cfset signature = createS3Signature(cs,awsSecretAccessKey)>
+		 
+		<cffile action="readBinary" file="#arguments.uploadDir##arguments.fileName#" variable="binaryFileData">
+		
+		<cfhttp method="PUT" url="http://s3.amazonaws.com/#arguments.bucketName#/#arguments.keyName#" timeout="#arguments.HTTPtimeout#">
+			<cfhttpparam type="header" name="Authorization" value="AWS #arguments.awsAccessKeyId#:#signature#">
+			<cfhttpparam type="header" name="Content-Type" value="#arguments.contentType#">
+			<cfhttpparam type="header" name="Date" value="#dateTimeString#">
+			<cfhttpparam type="header" name="x-amz-acl" value="#arguments.acl#">
+			<cfhttpparam type="header" name="x-amz-storage-class" value="#arguments.storageClass#">
+			<cfhttpparam type="body" value="#binaryFileData#">
+			<cfif arguments.cacheControl>
+				<cfhttpparam type="header" name="Cache-Control" value="max-age=2592000">
+				<cfhttpparam type="header" name="Expires" value="#DateFormat(now()+arguments.cacheDays,'ddd, dd mmm yyyy')# #TimeFormat(now(),'H:MM:SS')# GMT">
+			</cfif>
+		</cfhttp>
+
+		<cfreturn !isNull(cfhttp) AND structKeyExists(cfhttp.responseHeader, 'Status_Code') AND cfhttp.responseHeader['Status_Code'] EQ 200>
+	</cffunction>
 
 </cfcomponent>

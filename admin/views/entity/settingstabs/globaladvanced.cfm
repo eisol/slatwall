@@ -53,6 +53,8 @@ Notes:
 	<swa:SlatwallSettingTable showInheritance="false">
 		<swa:SlatwallSetting settingName="globalAdminDomainNames" />
 		<swa:SlatwallSetting settingName="globalAllowedOutsideRedirectSites" />
+		<swa:SlatwallSetting settingName="globalAPIDirtyRead" />
+		<swa:SlatwallSetting settingName="globalAPIPageShowLimit" />
 		<swa:SlatwallSetting settingName="globalClientSecret" />
 		<swa:SlatwallSetting settingName="globalEncryptionAlgorithm" />
 		<swa:SlatwallSetting settingName="globalEncryptionEncoding" />
@@ -64,7 +66,12 @@ Notes:
 		<swa:SlatwallSetting settingName="globalNoSessionPersistDefault" />
 		<swa:SlatwallSetting settingName="globalRemoteIDShowFlag" />
 		<swa:SlatwallSetting settingName="globalRemoteIDEditFlag" />
-		<swa:SlatwallSetting settingName="globalDisplayIntegrationProcessingErrors">
+		<swa:SlatwallSetting settingName="globalDisplayIntegrationProcessingErrors" />
+		<swa:SlatwallSetting settingName="globalFileTypeWhiteList" />
+		<swa:SlatwallSetting settingName="globalMIMETypeWhiteList" />
+		<swa:SlatwallSetting settingName="globalUseShippingIntegrationForTrackingNumberOption" />
+		<swa:SlatwallSetting settingName="globalSmartListGetAllRecordsLimit" />
+		<swa:SlatwallSetting settingName="globalAllowCustomBranchUpdates"/>
 	</swa:SlatwallSettingTable>
 </cfoutput>
 

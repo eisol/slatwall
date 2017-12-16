@@ -3,14 +3,57 @@
 	<cffunction name="cfcookie">
 		<cfargument name="name" type="string" required="true" />
 		<cfargument name="value" type="any" required="true" />
-		<cfargument name="expires" type="string" />
 		<cfargument name="secure" type="boolean" default="false" />
-		
-		<cfif structKeyExists(arguments, "expires")>
-			<cfcookie name="#arguments.name#" value="#arguments.value#" expires="#arguments.expires#" secure="#arguments.secure#" httponly="true">
-		<cfelse>
-			<cfcookie name="#arguments.name#" value="#arguments.value#" secure="#arguments.secure#" httponly="true">
+		<cfargument name="httpOnly" type="boolean"  default="true" />	
+		<cfargument name="expires" type="string" />
+		<cfargument name="domain" type="string" />
+		<!--- cfcookie cannot accept null arguments so using struct to make this easier to work with--->
+
+		<cfif !structKeyExists(arguments, "domain") and len(getApplicationValue("hibachiConfig").sessionCookieDomain)>
+			<cfset arguments.domain = getApplicationValue("hibachiConfig").sessionCookieDomain />
 		</cfif>
+		
+		<cfif !structKeyExists(arguments, "secure") and len(getApplicationValue("hibachiConfig").sessionCookieSecure)>
+			<cfset arguments.secure = getApplicationValue("hibachiConfig").sessionCookieSecure />
+		</cfif>
+		
+		<cfset arguments = removeNullStructValues(arguments)>
+		<cfcookie attributeCollection="#arguments#" />
+	</cffunction>
+	
+	<cffunction name="cfimap">
+		<cfargument name="action" default="GetHeaderOnly"/>
+		<cfargument name="attachmentpath" default=""/>
+		<cfargument name="Connection" default=""/>
+		<cfargument name="Folder" default=""/>
+		<cfargument name="GenerateUniqueFilenames" default=""/>
+		<cfargument name="MaxRows" default=""/>
+		<cfargument name="MessageNumber" default=""/>
+		<cfargument name="Name" default=""/>
+		<cfargument name="NewFolder" default=""/>
+		<cfargument name="Password" default=""/>
+		<cfargument name="Port" default=""/>
+		<cfargument name="Recurse" default=""/>
+		<cfargument name="Secure" default=""/>
+		<cfargument name="Server" default=""/>
+		<cfargument name="StartRow" default=""/>
+		<cfargument name="StopOnError" default=""/>
+		<cfargument name="Timeout" default=""/>
+		<cfargument name="Uid" default=""/>
+		<cfargument name="Username" default=""/>
+		<cfargument name="delimiter" default=""/>
+		<cfimap attributeCollection="#arguments#" />
+	</cffunction>
+	
+	<cffunction name="removeNullStructValues" returntype="struct" >
+		<cfargument name="oldStruct" type="struct">
+		<cfset var newStruct = {}/>
+		<cfloop collection="#arguments.oldStruct#" item="local.key">
+			<cfif structKeyExists(arguments.oldStruct,local.key) AND NOT isNull(arguments.oldStruct[local.key])>
+				<cfset newStruct[local.key] = arguments.oldStruct[local.key]/>
+			</cfif>
+		</cfloop>
+		<cfreturn newStruct/>
 	</cffunction>
 	
 	<cffunction name="cfhtmlhead">
@@ -43,6 +86,9 @@
 		<cfargument name="to" type="string" required="true" />
 		<cfargument name="subject" default="" />
 		<cfargument name="body" default="" />
+		<cfargument name="cc" default="" />
+		<cfargument name="bcc" default="" />
+		<cfargument name="charset" default="" />
 		<cfargument name="type" default="html" />
 		
 		<cftry>

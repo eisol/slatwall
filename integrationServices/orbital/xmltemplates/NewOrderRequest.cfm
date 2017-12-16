@@ -95,12 +95,12 @@ Notes:
 			<CustomerRefNum>#arguments.requestBean.getProviderToken()#</CustomerRefNum>
 		</cfif>
 		<OrderID>#arguments.requestBean.getOrder().getShortReferenceID( true )#</OrderID>
-		<Amount>#precisionEvaluate(numberFormat(arguments.requestBean.getTransactionAmount(),'.00')*100)#</Amount>
+		<Amount>#getHibachiScope().getService('HibachiUtilityService').precisionCalculate(numberFormat(arguments.requestBean.getTransactionAmount(),'.00')*100)#</Amount>
 		<cfif arguments.requestBean.getTransactionType() EQ "credit">
 			<TxRefNum>#arguments.requestBean.getOriginalChargeProviderTransactionID()#</TxRefNum>
 		</cfif>
 		<CustomerEmail>#arguments.requestBean.getAccountPrimaryEmailAddress()#</CustomerEmail>
-		<CustomerIpAddress>#CGI.REMOTE_ADDR#</CustomerIpAddress>
+		<CustomerIpAddress>#getRemoteAddress()#</CustomerIpAddress>
 	</NewOrder>
 </Request>
 </cfoutput>

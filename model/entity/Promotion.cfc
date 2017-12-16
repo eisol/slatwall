@@ -62,6 +62,7 @@ component displayname="Promotion" entityname="SlatwallPromotion" table="SwPromot
 	property name="promotionPeriods" singularname="promotionPeriod" cfc="PromotionPeriod" fieldtype="one-to-many" fkcolumn="promotionID" cascade="all-delete-orphan" inverse="true";    
 	property name="promotionCodes" singularname="promotionCode" cfc="PromotionCode" fieldtype="one-to-many" fkcolumn="promotionID" cascade="all-delete-orphan" inverse="true";
 	property name="appliedPromotions" singularname="appliedPromotion" cfc="PromotionApplied" fieldtype="one-to-many" fkcolumn="promotionID" cascade="all" inverse="true";
+	property name="attributeValues" singularname="attributeValue" cfc="AttributeValue" fieldtype="one-to-many" type="array" fkcolumn="promotionID" cascade="all-delete-orphan" inverse="true";
 	
 	// Remote Properties
 	property name="remoteID" ormtype="string";
@@ -79,7 +80,17 @@ component displayname="Promotion" entityname="SlatwallPromotion" table="SwPromot
 	property name="promotionCodesDeletableFlag" type="boolean" persistent="false"; 
 	
 	// ============ START: Non-Persistent Property Methods =================
-
+	
+	public any function getPromotionAppliedOrdersCount(){
+		var promotionAppliedCollectionList = getService("PromotionService").getPromotionAppliedCollectionList();
+		promotionAppliedCollectionList.addFilter('promotion.promotionID', "#getPromotionID()#", "=");
+		var count = promotionAppliedCollectionList.getRecordsCount();
+		if (!isNull(count) && count > 0){
+			return count;
+		}
+		return 0;
+	}
+	
 	public boolean function getCurrentFlag() {
 		if(!structKeyExists(variables, "currentFlag")) {
 			variables.currentFlag = false;
@@ -163,6 +174,14 @@ component displayname="Promotion" entityname="SlatwallPromotion" table="SwPromot
 		arguments.promotionApplied.removePromotion(this);
 	}
 	
+	// Attribute Values (one-to-many)    
+ 	public void function addAttributeValue(required any attributeValue) {    
+ 		arguments.attributeValue.setPromotion( this );    
+ 	}    
+ 	public void function removeAttributeValue(required any attributeValue) {    
+ 		arguments.attributeValue.removePromotion( this );    
+ 	}
+ 	
 	// =============  END:  Bidirectional Helper Methods ===================
 
 	// ================== START: Overridden Methods ========================

@@ -18,10 +18,33 @@
 	<cfset variables.entityObjects = {} />
 	<cfset variables.entityHasProperty = {} />
 	<cfset variables.entityHasAttribute = {} />
+	<cfset variables.processComponentDirectoryListing = [] />
 	
 	<cfscript>
 		public any function get(required string entityName, required any idOrFilter, boolean isReturnNewOnNotFound = false ) {
 			return getHibachiDAO().get(argumentcollection=arguments);
+		}
+		
+		public any function getParentPropertyByEntityName(required string entityName){
+			return getEntitiesMetaData()[ getProperlyCasedShortEntityName( arguments.entityName ) ].hb_parentPropertyName;
+		}
+		
+		public any function getParentPropertyByEntityNameAndPropertyIdentifier(required string entityName, required string propertyIdentifier){
+			var lastEntityName = attributes.hibachiScope.getService('HibachiService').getLastEntityNameInPropertyIdentifier(
+				attributes.entityName,
+				attributes.propertyIdentifier
+			);
+			
+			var propertyMetaData = attributes.hibachiScope.getService('HibachiService').getPropertiesStructByEntityName(
+				lastEntityName
+			)[listLast(attributes.propertyIdentifier, ".")];
+			return propertyMetaData.hb_parentPropertyName;
+		}
+		
+		public string function getSimpleRepresentationPropertyNameByEntityName(required string entityName){
+			var example = this.new(arguments.entityName);
+			var simpleRepresentationPropertyName = example.getSimpleRepresentationPropertyName();
+			return simpleRepresentationPropertyName;
 		}
 	
 		public any function getSmartList(string entityName, struct data={}){
@@ -112,7 +135,7 @@
 			
 			// Verify the preProcess
 			arguments.entity.validate( context=arguments.processContext );
-			
+
 			// If we pass preProcess validation then we can try to setup the processObject if the entity has one, and validate that
 			if(!arguments.entity.hasErrors() && arguments.entity.hasProcessObject(arguments.processContext)) {
 				invokeArguments[ "processObject" ] = arguments.entity.getProcessObject(arguments.processContext);
@@ -127,7 +150,6 @@
 				}
 				
 				invokeArguments[ "processObject" ].validate( context=arguments.processContext );
-				
 			}
 			
 			// if the entity still has no errors then we call call the process method
@@ -172,7 +194,9 @@
 	        
 	        // Validate this object now that it has been populated
 			arguments.entity.validate(context=arguments.context);
-			        
+			//check if this is new before save - announcements will need this information later.
+	        var isNew = arguments.entity.isNew();
+	        
 	        // If the object passed validation then call save in the DAO, otherwise set the errors flag
 	        if(!arguments.entity.hasErrors()) {
 	            arguments.entity = getHibachiDAO().save(target=arguments.entity);
@@ -180,11 +204,23 @@
                 // Announce After Events for Success
 				getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#Save", arguments);
 				getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#SaveSuccess", arguments);
+				
+				//If new need to announce the Create process as well as Success
+				if (isNew){
+					getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#Create", arguments);
+					getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#CreateSuccess", arguments);
+				}
 		    } else {
             
                 // Announce After Events for Failure
 				getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#Save", arguments);
 				getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#SaveFailure", arguments);
+				
+				//If new need to announce the Create Success
+				if (isNew){
+					getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#Create", arguments);
+					getHibachiEventService().announceEvent("after#arguments.entity.getClassName()#CreateFailure", arguments);
+				}
 	        }
 	        
 	        // Return the entity
@@ -192,57 +228,111 @@
 	    }
 	    
 	  /**
-		* Exports the given query/array to file.
-		* 
-		* @param data Data to export. (Required) (Currently only supports query and array of structs).
-		* @param columns List of columns to export. (optional, default: all)
-		* @param columnNames List of column headers to export. (optional, default: none)
-		* @param fileName File name for export. (default: uuid)
-		* @param fileType File type for export. (default: csv)
-		*/
-		public void function export(required any data, string columns, string columnNames, string fileName, string fileType = 'csv') {
-			if (isArray(data)){
-				arguments.data = transformArrayOfStructsToQuery( data, ListToArray(columnNames));
+        * Exports the given query/array to file.
+        * 
+        * @param data Data to export. (Required) (Currently only supports query and array of structs).
+        * @param columns List of columns to export. (optional, default: all)
+        * @param columnNames List of column headers to export. (optional, default: none)
+        * @param fileName File name for export. (default: uuid)
+        * @param fileType File type for export. (default: csv)
+        * This returns the path and filename of the exported file.
+        */ 
+         public any function export(required any data, string columns, string columnNames, string fileName, string fileType = 'csv', boolean downloadFile=true, folderPath) {
+
+            if (isArray(data)){
+                arguments.data = transformArrayOfStructsToQuery( data, ListToArray(columnNames));
+            }
+	    
+			var result = {};
+			var supportedFileTypes = "csv,txt";
+            if(!structKeyExists(arguments,"fileName")){
+                arguments.fileName = createUUID() ;
+            }
+			if(!listFindNoCase(supportedFileTypes,arguments.fileType)){
+				throw("File type not supported in export. Only supported file types are #supportedFileTypes#");
 			}
-			if(!structKeyExists(arguments,"fileName")){
-				arguments.fileName = createUUID() ;
-			}
-			var fileNameWithExt = arguments.fileName & "." & arguments.fileType ;
-			var filePath = getVirtualFileSystemPath() & "/" & fileNameWithExt ;
-			if(isQuery(data) && !structKeyExists(arguments,"columns")){
-				arguments.columns = arguments.data.columnList;
-			}
-			if(structKeyExists(arguments,"columns") && !structKeyExists(arguments,"columnNames")){
-				arguments.columnNames = arguments.columns;
-			}
-			var columnArray = listToArray(arguments.columns);
-			var columnCount = arrayLen(columnArray);
-			
-			if(arguments.fileType == 'csv'){
-				var dataArray=[arguments.columnNames];
-				for(var i=1; i <= data.recordcount; i++){
-					var row = [];
-					for(var j=1; j <= columnCount; j++){
-						arrayAppend(row,'"#data[columnArray[j]][i]#"');
-					}
-					arrayAppend(dataArray,arrayToList(row));
-				}
-				var outputData = arrayToList(dataArray,"#chr(13)##chr(10)#");
-				fileWrite(filePath,outputData);
+            var fileNameWithExt = arguments.fileName & "." & arguments.fileType ;
+				if(structKeyExists(arguments, "folderPath")){
+					var filePath = arguments.folderPath & "/" & fileNameWithExt;
+				} else if(structKeyExists(application,"tempDir")){
+				var filePath = application.tempDir & "/" & fileNameWithExt;
 			} else {
-				throw("Implement export for fileType #arguments.fileType#");
+				var filePath = GetTempDirectory() & fileNameWithExt;
 			}
-	
-			// Open / Download File
-			getHibachiUtilityService().downloadFile(fileNameWithExt,filePath,"application/#arguments.fileType#",true);
-		}
-	
-	private query function transformArrayOfStructsToQuery( required array arrayOfStructs, required array colNames ){
+            if(isQuery(data) && !structKeyExists(arguments,"columns")){
+                arguments.columns = arguments.data.columnList;
+            }
+            if(structKeyExists(arguments,"columns") && !structKeyExists(arguments,"columnNames")){
+                arguments.columnNames = arguments.columns;
+            }
+            var columnArray = listToArray(arguments.columns);
+            var columnCount = arrayLen(columnArray);
+            
+            if(arguments.fileType == 'csv'){
+				getHibachiUtilityService().queryToCsvFile(
+					filePath = filePath,
+					queryData = arguments.data,
+					columnNames = columnNames,
+					columnTitles = columns
+				);
+            }else{
+				throw("Implement export for fileType #arguments.fileType#");
+            }
+            
+			if(structKeyExists(arguments, "downloadFile") && arguments.downloadFile == true){
+				getHibachiUtilityService().downloadFile(fileNameWithExt,filePath,"application/#arguments.fileType#",true);
+			} else{
+				result.fileName = fileNameWithExt;
+				result.fileType = fileType;
+				result.filePath = filePath;
+				return result;
+            }
+        }
+
+    /*
+     * queryToCsv
+     * Allows us to pass in a query object and returns that data as a CSV.
+     * This is a refactor of Ben Nadel's method, http://www.bennadel.com/blog/1239-Updated-Converting-A-ColdFusion-Query-To-CSV-Using-QueryToCSV-.htm
+     * @param  {Query}      q               {required}  The cf query object to convert. E.g. pass in: qry.execute().getResult();
+     * @param  {Boolean}    hr              {required}  True if we should include a header row in our CSV, defaults to TRUE
+     * @param  {String}     d               {required}  Delimiter to use in CSV, defaults to a comma (,)
+     * @return {String}                                         CSV content
+     */
+    public string function queryToCsv(required query q, required boolean hr = true, required string d = ","){
+
+        var colNames    = listToArray( lCase(arguments.q.columnlist) );
+        var newLine     = (chr(13) & chr(10));
+        var buffer      = CreateObject('java','java.lang.StringBuffer').Init();
+        // Check if we should include a header row
+        if(arguments.hr){
+            // append our header row
+            buffer.append(
+              ArrayToList(colNames,arguments.d) & newLine
+            );
+        }
+        // Loop over query and build csv rows
+        for(var i=1; i <= arguments.q.recordcount; i=i+1){
+            // this individual row
+            var thisRow = [];
+            // loop over column list
+            for(var j=1; j <= arrayLen(colNames); j=j+1){
+                // create our row
+                thisRow[j] = replace( replace( arguments.q[colNames[j]][i],',','','all'),'""','""""','all' );
+            }
+            // Append new row to csv output
+            buffer.append(
+                JavaCast( 'string', ( ArrayToList( thisRow, arguments.d ) & iif(i < arguments.q.recordcount, "newLine","") ) )
+            );
+        }
+        return buffer.toString();
+    };
+    
+	public query function transformArrayOfStructsToQuery( required array arrayOfStructs, required array colNames ){
 		var rowsTotal = ArrayLen(arrayOfStructs);
 		var columnsTotal = ArrayLen(colNames); 
 		if (rowsTotal < 1){return QueryNew("");}
 		var columnNames = arguments.colNames;
-		var newQuery = queryNew(arrayToList(columnNames));
+		var newQuery = queryNew(arrayToList(columnNames), "VarChar"&repeatString(",VarChar", arraylen(columnNames)-1));
 		queryAddRow(newQuery, rowsTotal);
 		for (var i=1; i <= rowsTotal; i++){
 			for(var n=1; n <= columnsTotal; n++){
@@ -258,7 +348,7 @@
 			}
 		}
 		return newQuery;
-	}	
+	}
 			    
 	 	/**
 		 * Generic ORM CRUD methods and dynamic methods by convention via onMissingMethod.
@@ -672,7 +762,9 @@
 			arguments.entityName = getProperlyCasedShortEntityName(arguments.entityName);
 			
 			if(structKeyExists(getEntitiesMetaData(), arguments.entityName) && structKeyExists(getEntitiesMetaData()[arguments.entityName], "hb_serviceName")) {
-				return getService( getEntitiesMetaData()[ arguments.entityName ].hb_serviceName );
+				if(hasService(getEntitiesMetaData()[ arguments.entityName ].hb_serviceName)){
+					return getService( getEntitiesMetaData()[ arguments.entityName ].hb_serviceName );
+				}
 			}
 			
 			// By default just return the base hibachi service
@@ -775,25 +867,108 @@
 			return getEntityObject( arguments.entityName ).getPropertiesStruct(); 
 		}
 		
+		public any function getPropertyIsPersistentByEntityNameAndPropertyIdentifier(required string entityName, required string propertyIdentifier){
+			var propertyMetaData = getPropertiesStructByEntityName(
+				getLastEntityNameInPropertyIdentifier(
+					arguments.entityName,
+					arguments.propertyIdentifier
+				)
+			)[listLast(arguments.propertyIdentifier, ".")];
+			return !structKeyExists(propertyMetaData,'persistent') || propertyMetaData.persistent; 
+		}
+
 		// @hint returns a property of a given entity
 		public any function getPropertyByEntityNameAndPropertyName( required string entityName, required string propertyName ) {
-			return getPropertiesStructByEntityName( entityName=arguments.entityName )[ arguments.propertyName ]; 
+			var hasAttributeByEntityNameAndPropertyIdentifier = getHasAttributeByEntityNameAndPropertyIdentifier(arguments.entityName, arguments.propertyName);
+			if(!hasAttributeByEntityNameAndPropertyIdentifier){
+				var propertiesStructByEntityName = getPropertiesStructByEntityName( entityName=arguments.entityName );
+				if(structKeyExists(propertiesStructByEntityName,arguments.propertyName)){
+					return propertiesStructByEntityName[ arguments.propertyName ];					
+				}
+			} else {
+				var key = 'attributeService_getAttributeNameByAttributeCode_#arguments.propertyName#';
+				if(getHibachiCacheService().hasCachedValue(key)) {
+					return getHibachiCacheService().getCachedValue(key);
+				}
+			}
 		}
 		
-		public any function getEntitiesProcessContexts() {
-			if(!structCount(variables.entitiesProcessContexts)) {
-				var processContexts = {};
-				var emd = getEntitiesMetaData();
-				for(var entityName in emd) {
-					if(structKeyExists(emd[ entityName ], "hb_processContexts")) {
-						processContexts[ entityName ] = listToArray(emd[ entityName ].hb_processContexts);
-					}
-				}
+		public any function getPropertyByEntityNameAndSingularName( required string entityName, required string singularName ) {
+			var propertiesStruct = getPropertiesStructByEntityName( entityName=arguments.entityName );
+			for(var key in propertiesStruct){
+				var propertyStruct = propertiesStruct[key];
 				
-				variables.entitiesProcessContexts = processContexts;
+				if(isStruct(propertyStruct) && structKeyExists(propertyStruct,'singularname') && structKeyExists(arguments,'singularname') && lcase(propertyStruct.singularname) == lcase(arguments.singularName)){
+					return propertyStruct;
+				}
 			}
-			return variables.entitiesProcessContexts;
 		}
+		
+		public boolean function hasPropertyByEntityNameAndSinuglarName( required string entityName, required string singularName){
+			return !isNull(getPropertyByEntityNameAndSingularName(arguments.entityName,arguments.singularName));
+		}
+		
+		public string function getProcessComponentPath(){
+	    	return getDao('hibachiDao').getApplicationValue('applicationKey')&'.model.process.';
+	    }
+	    
+	    public array function getProcessComponentDirectoryListing(){
+	    	if(!arrayLen(variables.processComponentDirectoryListing)){
+	    		var processComponentPath = getProcessComponentPath();
+		    	var processComponentDirectoryPath = expandPath('/'&getDao('hibachiDao').getApplicationKey()) & '/model/process';
+		    	variables.processComponentDirectoryListing = directoryList(processComponentDirectoryPath,false,'name','*.cfc');
+	    	}
+	    	
+	    	return variables.processComponentDirectoryListing;
+	    }
+
+		public struct function getEntitiesProcessContexts(){
+			var serviceBeanInfo = getBeanFactory().getBeanInfo(regex="\w+Service").beanInfo;
+
+			if(!structCount(variables.entitiesProcessContexts)) {
+				//get processes form the services
+
+				for(var beanName in serviceBeanInfo){
+					var bean = getBeanFactory().getBean(beanName);
+					var serviceMetaData = getMetaData(bean);
+					var serviceFunctions = [];
+					if(structKeyExists(serviceMetaData,'functions')){
+						for(var functionItem in serviceMetaData.functions){
+							arrayAppend(serviceFunctions, functionItem);
+						}
+					}
+
+					if(listToArray(serviceMetaData.name,'.')[2]=='custom' && 
+						structKeyExists(serviceMetaData,'extends') && 
+						listLast(serviceMetaData.extends.name,'.') == beanName && 
+						structKeyExists(serviceMetaData.extends, 'functions')){
+						for(var functionItem in serviceMetaData.extends.functions){
+							arrayAppend(serviceFunctions, functionItem);
+						}
+					}
+					if(arrayLen(serviceFunctions)){
+						for(var functionItem in serviceFunctions){
+							if(
+								(!structKeyExists(functionItem,'access') || functionItem.access == 'public')
+								&& lcase(left(functionItem.name,7))=='process'
+							){
+								var processObjectName = mid(functionItem.name,8,len(functionItem.name));
+				    			var entityName = listFirst(processObjectName,'_');
+				    			var processName = listLast(processObjectName,"_");
+				    			if(!structKeyExists(variables.entitiesProcessContexts,entityName)){
+				    				variables.entitiesProcessContexts[entityName] = [];
+				    			}
+				    			if(!arrayFind(variables.entitiesProcessContexts[entityName],processName)){
+									arrayAppend(variables.entitiesProcessContexts[entityName],processName);
+				    			}
+							}
+						}
+					}
+
+				}
+		    }
+	    	return variables.entitiesProcessContexts;
+	    }
 		
 		// =====================  END: Cached Entity Meta Data Methods ============================
 		
@@ -822,7 +997,28 @@
 		}
 		
 		public boolean function getPropertyIsObjectByEntityNameAndPropertyIdentifier(required string entityName, required string propertyIdentifier){
-			return structKeyExists(getPropertiesStructByEntityName(getLastEntityNameInPropertyIdentifier(arguments.entityName, arguments.propertyIdentifier))[listLast(arguments.propertyIdentifier, ".")],'cfc');
+			var hasAttributeByEntityNameAndPropertyIdentifier=getHasAttributeByEntityNameAndPropertyIdentifier(arguments.entityName, arguments.propertyIdentifier);
+			
+			if(!hasAttributeByEntityNameAndPropertyIdentifier){
+				
+				var lastEntityNameInPropertyIdentifier = getLastEntityNameInPropertyIdentifier(
+					arguments.entityName, 
+					arguments.propertyIdentifier
+				);
+				
+				var propertiesStructByEntityName = getPropertiesStructByEntityName(
+					lastEntityNameInPropertyIdentifier
+				);
+				
+				var lastItemInPropertyIdentfier = listLast(arguments.propertyIdentifier, ".");
+				
+				
+				return structKeyExists(propertiesStructByEntityName,lastItemInPropertyIdentfier) && structKeyExists(
+					propertiesStructByEntityName[lastItemInPropertyIdentfier],'cfc'
+				);
+			} else {
+				return false;
+			}
 		}
 		
 		// @hint leverages the getEntityHasPropertyByEntityName() by traverses a propertyIdentifier first using getLastEntityNameInPropertyIdentifier()
@@ -833,6 +1029,7 @@
 				return false;	
 			}
 		}
+		
 		
 		// @hint traverses a propertyIdentifier to find the last entityName in the list... this is then used by the hasProperty and hasAttribute methods()
 		public string function getLastEntityNameInPropertyIdentifier( required string entityName, required string propertyIdentifier ) {
@@ -851,6 +1048,11 @@
 		public any function getTableTopSortOrder(required string tableName, string contextIDColumn, string contextIDValue) {
 			return getHibachiDAO().getTableTopSortOrder(argumentcollection=arguments);
 		}
+		
+		public string function getTableNameByEntityName(required string entityName){
+			entityMetaData = getEntityMetaData( arguments.entityName );
+			return entityMetaData.table; 
+		}
 	
 		public any function updateRecordSortOrder(required string recordIDColumn, required string recordID, required string entityName, required numeric newSortOrder) {
 			var entityMetaData = getEntityMetaData( arguments.entityName );
@@ -860,12 +1062,16 @@
 		
 		// @hint leverages the getEntityHasAttributeByEntityName() by traverses a propertyIdentifier first using getLastEntityNameInPropertyIdentifier()
 		public boolean function getHasAttributeByEntityNameAndPropertyIdentifier( required string entityName, required string propertyIdentifier ) {
-			return getEntityHasAttributeByEntityName( entityName=getLastEntityNameInPropertyIdentifier(arguments.entityName, arguments.propertyIdentifier), attributeCode=listLast(arguments.propertyIdentifier, "._") );
+			return getEntityHasAttributeByEntityName( 
+				entityName=getLastEntityNameInPropertyIdentifier(arguments.entityName, arguments.propertyIdentifier), 
+				attributeCode=listLast(arguments.propertyIdentifier, "._") 
+			);
 		}
 		
 		// @hint returns true or false based on an entityName, and checks if that entity has an extended attribute with that attributeCode
 		public boolean function getEntityHasAttributeByEntityName( required string entityName, required string attributeCode ) {
 			var attributeCodesList = getHibachiCacheService().getOrCacheFunctionValue("attributeService_getAttributeCodesListByAttributeSetType_ast#getProperlyCasedShortEntityName(arguments.entityName)#", "attributeService", "getAttributeCodesListByAttributeSetType", {1="ast#getProperlyCasedShortEntityName(arguments.entityName)#"});
+			
 			if(listFindNoCase(attributeCodesList, arguments.attributeCode)) {
 				return true;
 			}
@@ -883,6 +1089,230 @@
 			// Pull the meta data from the object (which in turn will cache it in the application for the next time)
 			return getEntityObject( arguments.entityName ).getDefaultCollectionProperties();
 		}
+		
+		
+		public array function getOptionsByEntityNameAndPropertyIdentifier(required any collectionList, required string entityName, required string propertyIdentifier){
+			var entityCollectionList = getOptionsCollectionListByEntityNameAndPropertyIdentifier(argumentCollection=arguments);
+			return entityCollectionList.getRecords();
+		}
+		
+		public struct function getOptionsByEntityNameAndPropertyIdentifierAndDiscriminatorProperty(required any collectionList, required string entityName, required string propertyIdentifier, required string discriminatorProperty, required string inversePropertyIdentifier){
+			var propertyMetaData = {};
+			
+			var lastEntityName = getLastEntityNameInPropertyIdentifier(arguments.entityName, arguments.propertyIdentifier & '.' & discriminatorProperty);
+			var propsStruct = getPropertiesStructByEntityName(lastEntityName);
+			var relatedEntity = arguments.discriminatorProperty;
+			propertyMetaData = propsStruct[relatedEntity];
+			var discriminatorRecords = getOptionsByEntityName(propertyMetaData.cfc);
+			var primaryIDName = getPrimaryIDPropertyNameByEntityName(propertyMetaData.cfc);
+			var optionData = {};
+			for(var record in discriminatorRecords){
+				var optionsCollectionList = getOptionsCollectionListByEntityNameAndPropertyIdentifier(argumentCollection=arguments);
+				optionsCollectionList.addFilter(arguments.propertyIdentifier&'.'&arguments.discriminatorProperty&'.#primaryIDName#',record['value']);
+				optionsCollectionList.applyData(data=url,excludesList=arguments.propertyIdentifier);
+				var optionsCollectionRecords = optionsCollectionList.getRecords();
+				
+				optionData[record['name']] = optionsCollectionRecords;
+			}
+			
+			return optionData;
+			
+		}
+		
+		private array function getOptionsByEntityName(required string entityName){
+			return getOptionsCollectionListByEntityName(arguments.entityName).getRecords();
+		}
+		
+		private any function getOptionsCollectionListByEntityName(required string entityName){
+			var optionsCollectionList = this.getCollectionList(arguments.entityName);
+			var primaryIDName = getPrimaryIDPropertyNameByEntityName(arguments.entityName);
+			var simpleRepresentationName = getSimpleRepresentationPropertyNameByEntityName(arguments.entityName);
+			var displayProperties = "";
+			displayProperties = listAppend(displayProperties,primaryIDName&'|value');
+			displayProperties = listAppend(displayProperties,simpleRepresentationName&'|name');
+			optionsCollectionList.setDisplayProperties(displayProperties);
+			optionsCollectionList.setOrderBy(simpleRepresentationName);
+			optionsCollectionList.setApplyOrderBysToGroupBys(false);
+			return optionsCollectionList;
+		}
+		
+		
+		
+		public any function getOptionsCollectionListByEntityNameAndPropertyIdentifier(required any collectionList, required string entityName, required string propertyIdentifier, required string inversePropertyIdentifier){
+			var entityCollectionList = this.invokeMethod('get#arguments.entityname#CollectionList');
+			
+			var displayProperties = '';
+			var propertyMetaData = {};
+			var lastEntityName = getLastEntityNameInPropertyIdentifier(arguments.entityName,arguments.propertyIdentifier);
+			var propsStruct = getPropertiesStructByEntityName(lastEntityName);
+			var relatedEntity = listLast(arguments.propertyIdentifier,'.');
+			propertyMetaData = propsStruct[relatedEntity];
+			if(getPropertyIsObjectByEntityNameAndPropertyIdentifier(arguments.entityName,arguments.propertyIdentifier)){
+				var primaryIDName = getPrimaryIDPropertyNameByEntityName(propertyMetaData.cfc);
+				var simpleRepresentationName = getSimpleRepresentationPropertyNameByEntityName(propertyMetaData.cfc);
+			}
+			
+			var displayProperties = "";
+			if(structKeyExists(propertyMetaData,'fieldtype')){
+				//applyfilters by inversePropertyIdentifier
+				if(structKeyExists(arguments.collectionList.getCollectionConfigStruct(),'filterGroups')){
+					entityCollectionList.applyRelatedFilterGroups(arguments.inversePropertyIdentifier,duplicate(arguments.collectionList.getCollectionConfigStruct()['filterGroups']));
+					entityCollectionList.removeFilter(arguments.propertyIdentifier&'.'&primaryIDName);
+				}
+				
+				
+				displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'.'&primaryIDName&'|value');
+				displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'.'&simpleRepresentationName&'|name');
+				switch(propertyMetaData.fieldtype){
+					case 'many-to-one':
+						break;
+					case 'one-to-many':
+						
+						break;
+					case 'many-to-many':
+						break;
+				}
+				entityCollectionList.setDisplayProperties(displayProperties);
+				entityCollectionList.applyData(data=url,excludesList=arguments.propertyIdentifier&'.'&primaryIDName);
+				entityCollectionList.addDisplayAggregate(getPrimaryIDPropertyNameByEntityName(entityCollectionList.getCollectionObject()),'Count','count',true);
+				entityCollectionList.setOrderBy(arguments.propertyIdentifier&'.'&simpleRepresentationName);
+			}else if(structKeyExists(propertyMetaData,'ormtype')) {
+				if(structKeyExists(arguments.collectionList.getCollectionConfigStruct(),'filterGroups')){
+					entityCollectionList.setCollectionConfigStruct(duplicate(arguments.collectionList.getCollectionConfigStruct()));
+					entityCollectionList.removeFilter(arguments.propertyIdentifier);
+				}
+				displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'|value');
+				displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'|name');
+				switch(propertyMetaData.ormtype){
+					case 'big_decimal':
+						break;
+					case 'string':
+						break;
+					case 'integer':
+						break;
+				}
+				entityCollectionList.setDisplayProperties(displayProperties);
+				entityCollectionList.applyData(data=url,excludesList=arguments.propertyIdentifier);
+				entityCollectionList.addDisplayAggregate(arguments.propertyIdentifier,'Count','count');
+				entityCollectionList.setOrderBy(arguments.propertyIdentifier);
+			}
+			entityCollectionList.setApplyOrderBysToGroupBys(false);
+			return entityCollectionList;
+		}
+		
+		public array function getOptionsByEntityNameAndPropertyIdentifierAndRangeData(required any collectionList, required string entityName, required string propertyIdentifier, required array rangeData){
+			var options = [];
+			var primaryIDName = getPrimaryIDPropertyNameByEntityName(arguments.entityName); 
+			for(var range in rangeData){
+				
+				var option = {};
+				option['name'] = "";
+				option['value'] = "";
+				
+				if(structKeyExists(range,'minValue')){
+					option['name'] &= range.minValue;
+					option['value'] &= range.minValue;
+				}
+				option['name'] &= '-';
+				option['value'] &= '^';
+				if(structKeyExists(range,'maxValue')){
+					option['name'] &= range.maxValue;
+					option['value'] &= range.maxValue;
+				}
+				
+				if(structKeyExists(range,'displayValue')){
+					option['name'] = range['displayValue'];
+				}
+				
+				var entityCollectionList = this.invokeMethod('get#arguments.entityname#CollectionList');
+				
+				if(structKeyExists(arguments.collectionList.getCollectionConfigStruct(),'filterGroups')){
+					entityCollectionList.setCollectionConfigStruct(duplicate(arguments.collectionList.getCollectionConfigStruct()));
+				}
+				entityCollectionList.applyData(data=url,excludesList=arguments.propertyIdentifier);
+				var filterGroupIndex = arraylen(entityCollectionList.getCollectionConfigStruct().filterGroups);
+				entityCollectionList.setDisplayProperties('productID');
+				entityCollectionList.removeFilter(propertyIdentifier=arguments.propertyIdentifier,filterGroupIndex=filterGroupIndex);
+				if(structKeyExists(range,'minValue')){
+					entityCollectionList.addFilter(arguments.propertyIdentifier,range.minValue,'>=');
+				}
+				if(structKeyExists(range,'maxValue')){
+					entityCollectionList.addFilter(arguments.propertyIdentifier,range.maxValue,'<=');
+				}
+				//calling getRecords until getRecordsCount behaves correctly aka knowing when to group by
+				entityCollectionList.getRecords();
+				option['count'] = entityCollectionList.getRecordsCount();
+				arrayAppend(options,option);
+			}
+			
+			return options;
+		}
+		
+		public array function getSelectedOptionsByApplyData(required string entityName, required string propertyIdentifier){
+			var applyData = {};
+			for(var key in url){
+				if(key contains arguments.propertyIdentifier){
+					if(left(key,2)=='r:'){
+						var options = [];
+						
+						return options;
+					}
+					
+					var optionValues = url[key];
+					var entityCollectionList = getService('HibachiService').getCollectionList(arguments.entityName);
+					applyData[key] = url[key];
+					entityCollectionList.applyData(applyData);
+					entityCollectionList.setDistinct(true);
+					var displayProperties = '';
+					var propertyMetaData = {};
+					var lastEntityName = getLastEntityNameInPropertyIdentifier(arguments.entityName,arguments.propertyIdentifier);
+					var propsStruct = getPropertiesStructByEntityName(lastEntityName);
+					var relatedEntity = listLast(arguments.propertyIdentifier,'.');
+					propertyMetaData = propsStruct[relatedEntity];
+					if(getPropertyIsObjectByEntityNameAndPropertyIdentifier(arguments.entityName,arguments.propertyIdentifier)){
+						var primaryIDName = getPrimaryIDPropertyNameByEntityName(propertyMetaData.cfc);
+						var simpleRepresentationName = getSimpleRepresentationPropertyNameByEntityName(propertyMetaData.cfc);
+					}
+					
+					var displayProperties = "";
+					if(structKeyExists(propertyMetaData,'fieldtype')){
+						displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'.'&primaryIDName&'|value');
+						displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'.'&simpleRepresentationName&'|name');
+						switch(propertyMetaData.fieldtype){
+							case 'many-to-one':
+								break;
+							case 'one-to-many':
+								
+								break;
+							case 'many-to-many':
+								break;
+						}
+						entityCollectionList.setDisplayProperties(displayProperties);
+						entityCollectionList.setOrderBy(arguments.propertyIdentifier&'.'&simpleRepresentationName);
+						
+					}else if(structKeyExists(propertyMetaData,'ormtype')) {
+						
+						displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'|value');
+						displayProperties = listAppend(displayProperties,arguments.propertyIdentifier&'|name');
+						switch(propertyMetaData.ormtype){
+							case 'big_decimal':
+								break;
+							case 'string':
+								break;
+							case 'integer':
+								break;
+						}
+						entityCollectionList.setDisplayProperties(displayProperties);
+						entityCollectionList.setOrderBy(arguments.propertyIdentifier);
+						entityCollectionList.applyData(data=url,excludesList=arguments.propertyIdentifier);
+					}
+					
+					return entityCollectionList.getRecords();
+				}
+			}
+			return [];
+		}
+		
 		
 	</cfscript>
 </cfcomponent>

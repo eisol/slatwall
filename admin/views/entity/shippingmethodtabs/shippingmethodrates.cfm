@@ -63,7 +63,10 @@ Notes:
 		<hb:HibachiListingColumn tdclass="primary" propertyidentifier="shippingMethodRateName" />
 		<hb:HibachiListingColumn propertyidentifier="addressZone.addressZoneName" />
 		<hb:HibachiListingColumn propertyidentifier="shipmentWeightRange" />
+		<hb:HibachiListingColumn propertyidentifier="splitShipmentWeight" />
+		<hb:HibachiListingColumn propertyidentifier="shipmentQuantityRange" />
 		<hb:HibachiListingColumn propertyidentifier="shipmentItemPriceRange" />
+		<hb:HibachiListingColumn propertyidentifier="hasPriceGroups" />
 		<hb:HibachiListingColumn propertyidentifier="defaultAmount" />
 		<hb:HibachiListingColumn propertyidentifier="activeFlag" />
 	</hb:HibachiListingDisplay>

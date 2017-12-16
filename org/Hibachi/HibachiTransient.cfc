@@ -172,6 +172,8 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 		// Call beforePopulate
 		beforePopulate(data=arguments.data);
 
+
+
 		// Get an array of All the properties for this object
 		var properties = getProperties();
 
@@ -183,15 +185,18 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 
 			// Check to see if this property has a key in the data that was passed in
 			if(
-				structKeyExists(arguments.data, currentProperty.name) && (!structKeyExists(currentProperty, "hb_populateEnabled") || currentProperty.hb_populateEnabled neq false) && (
+				structKeyExists(arguments.data, currentProperty.name) && (!structKeyExists(currentProperty, "hb_populateEnabled") || currentProperty.hb_populateEnabled neq false) &&
+				(
 					!isPersistent()
 					||
 					(getHibachiScope().getPublicPopulateFlag() && structKeyExists(currentProperty, "hb_populateEnabled") && currentProperty.hb_populateEnabled == "public")
 					||
-					getHibachiScope().authenticateEntityProperty( crudType="update", entityName=this.getClassName(), propertyName=currentProperty.name))) {
+					getHibachiScope().authenticateEntityProperty( crudType="update", entityName=this.getClassName(), propertyName=currentProperty.name))
+			) {
 
 				// ( COLUMN )
 				if( (!structKeyExists(currentProperty, "fieldType") || currentProperty.fieldType == "column") && isSimpleValue(arguments.data[ currentProperty.name ]) && !structKeyExists(currentProperty, "hb_fileUpload") ) {
+
 
 					// If the value is blank, then we check to see if the property can be set to NULL.
 					if( trim(arguments.data[ currentProperty.name ]) == "" && ( !structKeyExists(currentProperty, "notNull") || !currentProperty.notNull ) ) {
@@ -205,7 +210,7 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 						}
 						_setProperty(currentProperty.name, trim(arguments.data[ currentProperty.name ]), currentProperty.hb_formatType);
 						*/
-						_setProperty(currentProperty.name, trim(arguments.data[ currentProperty.name ]));
+						_setProperty(currentProperty.name, rereplace(trim(arguments.data[ currentProperty.name ]),chr(002),'','all'));
 
 						// if this property has a sessionDefault defined for it, then we should update that value with what was used
 						if(structKeyExists(currentProperty, "hb_sessionDefault")) {
@@ -279,11 +284,16 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 				// (ONE-TO-MANY) Do this logic if this property is a one-to-many or many-to-many relationship, and the data passed in is of type array
 				} else if ( structKeyExists(currentProperty, "fieldType") && (currentProperty.fieldType == "one-to-many" or currentProperty.fieldType == "many-to-many") && isArray( arguments.data[ currentProperty.name ] ) ) {
 
+					// Find the primaryID column Name for the related object
+					var primaryIDPropertyName = getService( "hibachiService" ).getPrimaryIDPropertyNameByEntityName( "#getApplicationValue('applicationKey')##listLast(currentProperty.cfc,'.')#" );
+
 					// Set the data of this One-To-Many relationship into it's own local array
 					var oneToManyArrayData = arguments.data[ currentProperty.name ];
 
-					// Find the primaryID column Name for the related object
-					var primaryIDPropertyName = getService( "hibachiService" ).getPrimaryIDPropertyNameByEntityName( "#getApplicationValue('applicationKey')##listLast(currentProperty.cfc,'.')#" );
+					//Filter invalid indices
+					oneToManyArrayData = arrayFilter(oneToManyArrayData,function(value){
+						return !isNull(value);
+					});
 
 					// Loop over the array of objects in the data... Then load, populate, and validate each one
 					for(var a=1; a<=arrayLen(oneToManyArrayData); a++) {
@@ -370,10 +380,22 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 
 			// Setup the current property
 			currentProperty = properties[p];
-
+			
+			
 			// Check to see if we should upload this property
-			if( structKeyExists(arguments.data, currentProperty.name) && (!structKeyExists(currentProperty, "fieldType") || currentProperty.fieldType == "column") && isSimpleValue(arguments.data[ currentProperty.name ]) && structKeyExists(currentProperty, "hb_fileUpload") && currentProperty.hb_fileUpload && structKeyExists(currentProperty, "hb_fileAcceptMIMEType") && len(arguments.data[ currentProperty.name ]) && structKeyExists(form, currentProperty.name) ) {
-
+			if( 
+				structKeyExists(arguments.data, currentProperty.name) 
+				&& (
+					!structKeyExists(currentProperty, "fieldType") 
+					|| currentProperty.fieldType == "column"
+				) && isSimpleValue(arguments.data[ currentProperty.name ]) 
+				&& structKeyExists(currentProperty, "hb_fileUpload") 
+				&& currentProperty.hb_fileUpload 
+				&& structKeyExists(currentProperty, "hb_fileAcceptMIMEType") 
+				&& len(arguments.data[ currentProperty.name ]) 
+				&& structKeyExists(form, currentProperty.name) 
+				&& len(form[currentProperty.name])
+			) {
 				// Wrap in try/catch to add validation error based on fileAcceptMIMEType
 				try {
 
@@ -387,7 +409,7 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 
 					// Do the upload
 					var uploadData = fileUpload( uploadDirectory, currentProperty.name, currentProperty.hb_fileAcceptMIMEType, 'makeUnique' );
-
+					
 					// Update the property with the serverFile name
 					_setProperty(currentProperty.name, uploadData.serverFile);
 				} catch(any e) {
@@ -489,6 +511,16 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 	// =======================  END:  POPULATION & VALIDATION =======================================
 	// ======================= START: PROPERTY INTROSPECTION ========================================
 
+	public any function hasPropertyByPropertyIdentifier(required string propertyIdentifier){
+		var object = getLastObjectByPropertyIdentifier( propertyIdentifier=arguments.propertyIdentifier );
+
+		if(isNull(object) || isSimpleValue(object)) {
+			return false;
+		}
+		var propertyName = listLast(arguments.propertyIdentifier,'.');
+		return object.hasProperty(propertyName);
+	}
+
 	// @hint Public method to retrieve a value based on a propertyIdentifier string format
 	public any function getValueByPropertyIdentifier(required string propertyIdentifier, boolean formatValue=false) {
 		var object = getLastObjectByPropertyIdentifier( propertyIdentifier=arguments.propertyIdentifier );
@@ -507,8 +539,22 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 		return "";
 	}
 
+	public string function getOrmTypeByPropertyIdentifier( required string propertyIdentifier ) {
+		var entityName = getService('HibachiService').getLastEntityNameInPropertyIdentifier(entityName=this.getClassName(), propertyIdentifier=arguments.propertyIdentifier );
+		var object = getService('HibachiService').getEntityObject(entityName);
+		var propertyName = listLast(arguments.propertyIdentifier,'.');
+		if(
+			!isNull(object) 
+			&& !isSimpleValue(object)
+			&& structKeyExists(object.getPropertyMetaData( propertyName ),'ormtype')
+		) {
+			return object.getPropertyMetaData( propertyName ).ormtype;
+		}
+		return "";
+	}
+
 	public any function getLastObjectByPropertyIdentifier(required string propertyIdentifier) {
-		
+
 		if(listLen(arguments.propertyIdentifier, ".") eq 1) {
 			return this;
 		}
@@ -761,6 +807,16 @@ component output="false" accessors="true" persistent="false" extends="HibachiObj
 		// Default case if no matches were found is a text field
 		return "text";
 	}
+
+	public boolean function getPropertyIsNumeric( required string propertyName ) {
+		var propertyMetaData = getPropertyMetaData(arguments.propertyName);
+		if( structKeyExists(propertyMetaData, "ormtype") && 
+			listFindNoCase("big_decimal,integer,int,double,float", propertyMetaData.ormtype)
+		){
+			return true; 
+		}
+		return false; 
+	} 
 
 	// @help public method for getting the meta data of a specific property
 	public struct function getPropertyMetaData( required string propertyName ) {

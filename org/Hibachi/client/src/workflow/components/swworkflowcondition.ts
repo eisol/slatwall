@@ -4,26 +4,20 @@ class SWWorkflowCondition{
 	public static Factory(){
 		var directive = (
 			$log,
-			$location,
 			$hibachi,
-			formService,
 			metadataService,
 			workflowPartialsPath,
 			hibachiPathBuilder
 		)=> new SWWorkflowCondition(
 			$log,
-			$location,
 			$hibachi,
-			formService,
 			metadataService,
 			workflowPartialsPath,
 			hibachiPathBuilder
 		);
 		directive.$inject = [
 			'$log',
-			'$location',
 			'$hibachi',
-			'formService',
 			'metadataService',
 			'workflowPartialsPath',
 			'hibachiPathBuilder'
@@ -32,9 +26,7 @@ class SWWorkflowCondition{
 	}
 	constructor(
 		$log,
-		$location,
 		$hibachi,
-		formService,
 		metadataService,
 		workflowPartialsPath,
 			hibachiPathBuilder
@@ -93,7 +85,7 @@ class SWWorkflowCondition{
 				}else{
 					angular.forEach(scope.workflowCondition.breadCrumbs,function(breadCrumb,key){
 						if(angular.isUndefined(scope.filterPropertiesList[breadCrumb.propertyIdentifier])){
-							var filterPropertiesPromise = $hibachi.getFilterPropertiesByBaseEntityName(breadCrumb.cfc);
+							var filterPropertiesPromise = $hibachi.getFilterPropertiesByBaseEntityName(breadCrumb.cfc, true);
 							filterPropertiesPromise.then(function(value){
 								metadataService.setPropertiesList(value,breadCrumb.propertyIdentifier);
 								scope.filterPropertiesList[breadCrumb.propertyIdentifier] = metadataService.getPropertiesListByBaseEntityAlias(breadCrumb.propertyIdentifier);

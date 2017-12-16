@@ -86,11 +86,23 @@ component extends="org.Hibachi.Hibachi" output="false" {
 		
 		// SET Database Type
 		request.slatwallScope.setApplicationValue("databaseType", this.ormSettings.dialect);
+		
+		// Reload All Integrations, we pass in the beanFactory and it is returned so that it can be updated it with any integration beans prefixed 
+		var beanFactory = getBeanFactory().getBean("integrationService").updateIntegrationsFromDirectory( getBeanFactory() );
+		
+		setBeanFactory( beanFactory );
+		
+		writeLog(file="Slatwall", text="General Log - Integrations have been updated & custom beans have been added to bean factory");
 	}
 	
 	public void function onUpdateRequest() {
-		// Setup Default Data... Not called on soft reloads.
-		getBeanFactory().getBean("hibachiDataService").loadDataFromXMLDirectory(xmlDirectory = ExpandPath("/Slatwall/config/dbdata"));
+		if(!getHibachiScope().getApplicationValue('skipDbData')){
+			// Setup Default Data... Not called on soft reloads.
+			getBeanFactory().getBean("hibachiDataService").loadDataFromXMLDirectory(xmlDirectory = ExpandPath("/Slatwall/config/dbdata"));
+		}
+		// Setup Default Data.. Not called on soft reloads
+		getBeanFactory().getBean('integrationService').loadDataFromIntegrations();
+		
 		writeLog(file="Slatwall", text="General Log - Default Data Has Been Confirmed");
 		
 		// Clear the setting cache so that it can be reloaded
@@ -102,18 +114,14 @@ component extends="org.Hibachi.Hibachi" output="false" {
         	writeLog(file="Slatwall", text="General Log - Setting Meta cache has been cleared because of updated request");
 		
 		// Run Scripts
-		getBeanFactory().getBean("updateService").runScripts();
+		if( !getHibachiScope().getApplicationValue('skipDbData')){
+			getBeanFactory().getBean("updateService").runScripts();
+		}
 		writeLog(file="Slatwall", text="General Log - Update Service Scripts Have been Run");
+		
 	}
 	
 	public void function onFirstRequestPostUpdate() {
-		
-		// Reload All Integrations, we pass in the beanFactory and it is returned so that it can be updated it with any integration beans prefixed 
-		var beanFactory = getBeanFactory().getBean("integrationService").updateIntegrationsFromDirectory( getBeanFactory() );
-		
-		setBeanFactory( beanFactory );
-		
-		writeLog(file="Slatwall", text="General Log - Integrations have been updated & custom beans have been added to bean factory");
 	}
 	
 	// ===================================== END: HIBACHI HOOKS

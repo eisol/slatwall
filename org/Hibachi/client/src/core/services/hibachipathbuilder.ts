@@ -4,6 +4,8 @@
 class HibachiPathBuilder{
     public baseURL:string;
     public basePartialsPath:string;
+    public apiSubsystemName:string;
+
     //@ngInject
     constructor(){
 
@@ -17,9 +19,13 @@ class HibachiPathBuilder{
         this.basePartialsPath = basePartialsPath
     }
 
+    public setApiSubsystemName = (apiSubsystemName:string):void=>{
+        this.apiSubsystemName = apiSubsystemName
+    }
+
     public buildPartialsPath=(componentsPath:string):string=>{
         if(angular.isDefined(this.baseURL) && angular.isDefined(this.basePartialsPath)){
-            return this.baseURL + this.basePartialsPath + componentsPath;
+            return (this.baseURL + this.basePartialsPath + componentsPath).replace("//","/");
          }else{
             throw('need to define baseURL and basePartialsPath in hibachiPathBuilder. Inject hibachiPathBuilder into module and configure it there');
         }

@@ -5,7 +5,7 @@
 		<div class="row s-header-bar">
 			<div class="col-md-12 s-header-nav">
 				<ul class="nav nav-tabs" role="tablist">
-					<li class="active"><a href="/##j-basic-2" role="tab" data-toggle="tab">Basic</a></li>
+					<li class="active"><a href="/##j-basic-2" role="tab" data-toggle="tab" id="basictab">Basic</a></li>
 					<li><a href="/##j-conditions-2" role="tab" data-toggle="tab">Conditions</a></li>
 					<li>
 						<a 	href="/##j-actions-2" role="tab" 
@@ -36,7 +36,7 @@
 										<div class="form-group">
 											<sw-property-display
 												data-object="workflowTasks.selectedTask"
-												data-property="taskName"
+												data-property-identifier="taskName"
 												data-editable="true"
 												data-editing="true"
 												data-is-dirty="true"	
@@ -47,7 +47,7 @@
 										<div class="form-group">
 											<sw-property-display
 												data-object="workflowTasks.selectedTask"
-												data-property="activeFlag"
+												data-property-identifier="activeFlag"
 												data-editable="true"
 												data-editing="true"	
 												data-is-dirty="true"										
@@ -80,6 +80,7 @@
 											<sw-filter-groups
 													ng-if="workflowTasks.selectedTask.data.taskConditionsConfig.filterGroups.length"
 													data-collection-config="workflowTasks.selectedTask.data.taskConditionsConfig"
+													data-save-collection="workflowTasks.selectedTask.$$save()"
 													data-filter-group="workflowTasks.selectedTask.data.taskConditionsConfig.filterGroups[0]"
 							                		data-filter-group-item="workflowTasks.selectedTask.data.taskConditionsConfig.filterGroups[0].filterGroup"
 							                		data-filter-properties-list="filterPropertiesList"
@@ -89,14 +90,14 @@
 									</div>
 								</div>
 							</div>
-							<sw-property-display
-                                data-object="workflowTasks.selectedTask"
-                                data-property="taskConditionsConfig"
-                                data-editing="true"
-                                data-editable="true"
-                                data-is-dirty="true"
-                                ng-show="false"
-                            ></sw-property-display>
+							<span style="display:none"
+                                  sw-property-display
+                                  data-object="workflowTasks.selectedTask"
+                                  data-property-identifier="taskConditionsConfig"
+                                  data-editing="true"
+                                  data-editable="true"
+                                  data-is-dirty="true"
+                                  data-field-type="json"></span>
 						</sw-form>
 					</div>
 				

@@ -4,39 +4,23 @@ class SWCriteriaNumber{
 	public static Factory(){
 		var directive = (
 			$log,
-			$hibachi,
-			$filter,
 			collectionPartialsPath,
-			collectionService,
-			metadataService,
 			hibachiPathBuilder
 		)=>new SWCriteriaNumber(
 			$log,
-			$hibachi,
-			$filter,
 			collectionPartialsPath,
-			collectionService,
-			metadataService,
 			hibachiPathBuilder
 		);
 		directive.$inject = [
 			'$log',
-			'$hibachi',
-			'$filter',
 			'collectionPartialsPath',
-			'collectionService',
-			'metadataService',
 			'hibachiPathBuilder'
 		];
 		return directive;
 	}
 	constructor(
 		$log,
-		$hibachi,
-		$filter,
 		collectionPartialsPath,
-		collectionService,
-		metadataService,
 		hibachiPathBuilder
 	){
 		return {
@@ -109,6 +93,22 @@ class SWCriteriaNumber{
 								display:"Equals",
 								comparisonOperator:"eq"
 							},
+                            {
+                                display:"Greater Than",
+                                comparisonOperator:"gt"
+                            },
+                            {
+                                display:"Greater Than Or Equal",
+                                comparisonOperator:"gte"
+                            },
+                            {
+                                display:"Less Than",
+                                comparisonOperator:"lt"
+                            },
+                            {
+                                display:"Less Than Or Equal",
+                                comparisonOperator:"lte"
+                            },
 							{
 								display:"Doesn't Equal",
 								comparisonOperator:"neq"

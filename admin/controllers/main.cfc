@@ -109,7 +109,7 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 			rc.$.slatwall.showMessageKey( 'admin.metaexists_error' );
 		}
 	}
-
+	//TODO: deprecate ,  getImageDirectory()
 	public void function saveImage(required struct rc){
 
 		var image = getImageService().getImage(rc.imageID, true);
@@ -174,15 +174,17 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 
 		if(rc.process) {
 			logHibachi("Update Called", true);
-
-			if(rc.branchType eq "standard") {
-				getUpdateService().update(branch=rc.updateBranch);
-			} else if (rc.branchType eq "custom") {
+			if(rc.branchType eq "custom"){
 				getUpdateService().update(branch=rc.customBranch);
+			}else{
+				getUpdateService().update(branch=rc.updateBranch);
 			}
+			
 
 			logHibachi("Update Finished, Now Calling Reload", true);
+
 			rc.$.slatwall.showMessageKey("admin.main.update_success");
+			
 			getFW().redirect(action="admin:main.default", preserve="messages", queryString="#getApplicationValue('applicationReloadKey')#=#getApplicationValue('applicationReloadPassword')#&#getApplicationValue('applicationUpdateKey')#=#getApplicationValue('applicationUpdatePassword')#");
 		}
 
@@ -190,6 +192,7 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 		var versions = getUpdateService().getAvailableVersions();
 		rc.availableDevelopVersion = versions.develop;
 		rc.availableMasterVersion = versions.master;
+		rc.availableHotfixVersion = versions.hotfix;
 
 		rc.currentVersion = getApplicationValue('version');
 		if(listLen(rc.currentVersion, '.') > 3) {
@@ -284,7 +287,6 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 
 		if(!rc.$.slatwall.getAccount().hasErrors()) {
 			rc.$.slatwall.showMessageKey("entity.Account.process.updatePassword_success");
-			getFW().redirect(action="admin:main.default", preserve="messages");
 		}
 
 		login(rc);
@@ -308,7 +310,7 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 		param name="arguments.rc.rbLocale" default="";
 		param name="arguments.rc.redirectURL" default="";
 
-		arguments.rc.$.slatwall.getSession().setRBLocale(htmlEditFormat(arguments.rc.rbLocale));
+		arguments.rc.$.slatwall.getSession().setRBLocale(hibachiHTMLEditFormat(arguments.rc.rbLocale));
 		arguments.rc.$.slatwall.setPersistSessionFlag( true );
 
 		getFW().redirectExact( rc.redirectURL );
@@ -344,4 +346,3 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 	}
 
 }
-

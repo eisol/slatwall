@@ -76,7 +76,11 @@ component output="false" accessors="true" extends="HibachiProcess" {
 			return variables.orderPayment;
 		} else {
 			// return latest subscription order payment
-			return getSubscriptionUsage().getUniquePreviousSubscriptionOrderPayments()[arrayLen(getSubscriptionUsage().getUniquePreviousSubscriptionOrderPayments())];
+			var uniquePreviousSubscriptionOrderPayments = getSubscriptionUsage().getUniquePreviousSubscriptionOrderPayments();  
+			var uniquePreviousSubscriptionOrderPaymentsCount = arrayLen(uniquePreviousSubscriptionOrderPayments);	
+			if(uniquePreviousSubscriptionOrderPaymentsCount != 0){
+				return uniquePreviousSubscriptionOrderPayments[uniquePreviousSubscriptionOrderPaymentsCount];
+			}
 		}
 	}
 
@@ -131,6 +135,9 @@ component output="false" accessors="true" extends="HibachiProcess" {
 	}
 
 	public numeric function getProratedPrice() {
+		if(isNull(getSubscriptionUsage().getExpirationDate()) || !isDate(getSubscriptionUsage().getExpirationDate())) {
+			return getSubscriptionUsage().getRenewalPrice();
+		}
 		var extendDurationFromNow = dateDiff("d", getSubscriptionUsage().getExpirationDate(), getExtendExpirationDate() );
 		var prorateDurationFromNow = dateDiff("d", getSubscriptionUsage().getExpirationDate(), getProrateExpirationDate() );
 		var proratePercentage = prorateDurationFromNow / extendDurationFromNow * 100;

@@ -85,6 +85,7 @@ Notes:
 					<hb:HibachiPropertyDisplay object="#rc.processObject.getProduct()#" property="productCode" fieldName="product.productCode" edit="true" title="#$.slatwall.rbKey('entity.product.#rc.processObject.getBaseProductType()#.productCode')#">
 
 					<hb:HibachiPropertyDisplay object="#rc.processObject#" property="price" edit="true">
+					<hb:HibachiPropertyDisplay object="#rc.processObject#" property="listPrice" edit="true">
 
 				</hb:HibachiPropertyList>
 
@@ -170,6 +171,7 @@ Notes:
 						<swa:SlatwallErrorDisplay object="#rc.processObject#" errorName="contents" />
 						<hb:HibachiListingDisplay smartList="#contentSmartList#" multiselectFieldName="contents" edit="true">
 							<hb:HibachiListingColumn propertyIdentifier="title"  tdClass="primary" />
+							<hb:HibachiListingColumn propertyIdentifier="site.siteName"  />
 						</hb:HibachiListingDisplay>
 
 					</hb:HibachiPropertyList>
@@ -207,17 +209,20 @@ Notes:
 
 					<hb:HibachiPropertyRow>
 						<hb:HibachiPropertyList>
-
+							<!--- Option Listing --->
 							<sw-listing-display
-								ng-if="preprocessproduct_createCtrl.collectionListingPromise && preprocessproduct_createCtrl.collection"
-								data-collection-promise="preprocessproduct_createCtrl.collectionListingPromise"
-								data-collection="preprocessproduct_createCtrl.collection"
-								data-multiselect-field-name="options"
+								ng-if="preprocessproduct_createCtrl.collectionListingPromise && preprocessproduct_createCtrl.collection"	
+								data-collection-config="preprocessproduct_createCtrl.collection.collectionConfig"
 								data-edit="true"
-							    data-show-search="true"
-							>
+								data-has-search="true"
+								data-show-search="true"
+								data-has-action-bar="false" 
+								data-persisted-collection-config="true" 
+								data-name="optionCollectionTable"
+								data-multiselectable="true"
+								data-multiselect-field-name="options"
+								data-multi-slot="true">
 							</sw-listing-display>
-
 						</hb:HibachiPropertyList>
 					</hb:HibachiPropertyRow>
 

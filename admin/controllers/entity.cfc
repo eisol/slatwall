@@ -52,6 +52,7 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 	property name="currencyService" type="any";
 	property name="emailService" type="any";
 	property name="fileService" type="any";
+	property name="hibachiService" type="any";
 	property name="imageService" type="any";
 	property name="measurementService" type="any";
 	property name="optionService" type="any";
@@ -104,6 +105,15 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 
 		getFW().redirect(action="admin:entity.detailaddresszone", queryString="addressZoneID=#rc.addressZoneID#&messageKeys=admin.setting.deleteaddresszonelocation_success");
 	}
+	
+	public void function deleteFormResponse(required struct rc) {
+		param name="rc.formResponseID" default="";
+		rc.formResponse = getService('formService').getFormResponse(rc.formResponseID);
+
+		arguments.rc.sRedirectAction = "admin:entity.detailform";
+		arguments.rc.sRedirectQS = "formID=#rc.formResponse.getForm().getFormID()#";
+		genericDeleteMethod(entityName="formResponse", rc=arguments.rc);
+	}
 
 	// Country
 	public void function editCountry(required struct rc) {
@@ -152,10 +162,39 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 	public void function detailMeasurementUnit(required struct rc) {
 		rc.measurementUnit = getMeasurementService().getMeasurementUnit(rc.unitCode);
 	}
+	
+	//Integration
+	public void function detailIntegration(required struct rc){
+		genericDetailMethod(entityName="Integration", rc=arguments.rc);
+		var detailViewDirectory = expandPath('/Slatwall') & '/integrationServices/#rc.integration.getIntegrationPackage()#/views/entity/detailintegration.cfm';
+		if(fileExists(detailViewDirectory)){
+			getFW().setView('#rc.integration.getIntegrationPackage()#:entity.detailIntegration');	
+		}
+		
+	} 
 
+	public void function editIntegration(required struct rc){
+		genericEditMethod(entityName="Integration", rc=arguments.rc);
+		
+		var editViewDirectory = expandPath('/Slatwall') & '/integrationServices/#rc.integration.getIntegrationPackage()#/views/entity/editintegration.cfm';
+		var detailViewDirectory = expandPath('/Slatwall') & '/integrationServices/#rc.integration.getIntegrationPackage()#/views/entity/detailintegration.cfm';
+		if(fileExists(editViewDirectory)){
+			getFW().setView('#rc.integration.getIntegrationPackage()#:entity.editIntegration');	
+		}else if(fileExists(detailViewDirectory)){
+			getFW().setView('#rc.integration.getIntegrationPackage()#:entity.detailIntegration');	
+		}
+		
+	} 
+	
 
 	// Order
 	public void function detailOrder(required struct rc) {
+		if(structKeyExists(rc,'subscriptionOrderItemID')){
+			var subscriptionOrderItem = getService('orderService').getSubscriptionOrderItem(rc.subscriptionOrderItemID);
+			if(!isNull(subscriptionOrderItem)){
+				rc.order = subscriptionOrderItem.getOrderItem().getOrder();	
+			}
+		}
 		genericDetailMethod(entityName="Order", rc=arguments.rc);
 		if(!isNull(rc.order) && rc.order.getStatusCode() eq "ostNotPlaced") {
 			rc.entityActionDetails.listAction = "admin:entity.listcartandquote";
@@ -164,6 +203,12 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 	}
 
 	public void function editOrder(required struct rc) {
+		if(structKeyExists(rc,'subscriptionOrderItemID')){
+			var subscriptionOrderItem = getService('orderService').getSubscriptionOrderItem(rc.subscriptionOrderItemID);
+			if(!isNull(subscriptionOrderItem)){
+				rc.order = subscriptionOrderItem.getOrderItem().getOrder();	
+			}
+		}
 		genericEditMethod(entityName="Order", rc=arguments.rc);
 		if(!isNull(rc.order) && rc.order.getStatusCode() eq "ostNotPlaced") {
 			rc.entityActionDetails.listAction = "admin:entity.listcartandquote";
@@ -393,5 +438,17 @@ component output="false" accessors="true" extends="Slatwall.org.Hibachi.HibachiC
 
 		super.genericSaveMethod('TaskSchedule',rc);
 	}
-
+	
+	public void function deleteCustomPropertyFile(required struct rc){
+		var entityService = getHibachiService().getServiceByEntityName(arguments.rc.entityName);
+		var entity = entityService.invokeMethod('get#arguments.rc.entityName#By#arguments.rc.entityName#ID',{1=arguments.rc['#arguments.rc.entityName#ID']});
+		invoke(entity,'remove#arguments.rc.attributeCode#');
+		var attribute = getService('attributeService').getAttributeByAttributeCode(arguments.rc.attributeCode);
+		var filePath = ExpandPath(entity.invokeMethod('get#arguments.rc.attributeCode#FileUrl'));
+		var isFile = attribute.getAttributeInputType() == 'file';
+		if(isFile && FileExists(filePath)){
+			FileDelete(filePath);
+		}
+		renderOrRedirectSuccess( defaultAction="admin:entity.detailstate", maintainQueryString=true, rc=arguments.rc);
+	}
 }

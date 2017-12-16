@@ -50,6 +50,24 @@ Notes:
 	
 	<cfproperty name="hibachiCacheService" type="any" />
 	
+	<cffunction name="insertSetting" output="false" returntype="void">
+		<cfargument name="settingName" type="string" required="true" />
+		<cfargument name="settingValue" />
+		
+		<cfset var rs = "" />
+		<cfset var settingID = lcase(replace(createUUID(),"-","","all"))/>
+		<cfquery name="rs">
+			INSERT INTO SwSetting (settingID,settingName,settingValue) 
+			VALUES (
+				<cfqueryparam cfsqltype="cf_sql_varchar" value="#settingID#">,
+				<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.settingName#">,
+				<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.settingValue#">
+			)
+		</cfquery>
+		<cfset getHibachiCacheService().updateServerInstanceSettingsCache(getHibachiScope().getServerInstanceIPAddress())/>
+		
+	</cffunction>
+	
 	<cffunction name="getSettingRecordExistsFlag" output="false" returntype="boolean">
 		<cfargument name="settingName" type="string" required="true" />
 		<cfargument name="settingValue" />
@@ -89,7 +107,7 @@ Notes:
 				SwSetting
 			WHERE
 				LOWER(settingName) = <cfqueryparam cfsqltype="cf_sql_varchar" value="#LCASE(arguments.settingName)#">
-				<cfloop list="#potentialRelationships#" index="relationship">
+				<cfloop list="#potentialRelationships#" index="local.relationship">
 					<cfif structKeyExists(arguments.settingRelationships, relationship)>
 						AND #relationship# = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.settingRelationships[ relationship ]#" > 
 					<cfelse>

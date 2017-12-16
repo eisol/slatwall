@@ -47,8 +47,63 @@ Notes:
 
 */
 component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
+	
+	/**
+	* @test
+	*/
+	public void function all_entity_properties_with_tomany_has_singularname() {
+		//holds all errors
+		var entitiesThatDontHaveSingularNameArray = [];
+		
+		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
+		
+		for(var entityName in allEntities) {
+			var properties = request.slatwallScope.getService("hibachiService").getPropertiesByEntityName(entityName);
+			for(var property in properties) {
+				if(
+					structkeyExists(property,'fieldtype') 
+					&& (property.fieldtype == 'one-to-many' || property.fieldtype == 'many-to-many')
+				){
+					//if we have a to-many then singularname should be defined
+					if(!structkeyExists(property,'singularname')){
+						arrayAppend(entitiesThatDontHaveSingularNameArray,{propertyName=property.name,entityName=entityName});
+					}
+				}
+
+			}
+		}
+		
+		
+		assert(!arrayLen(entitiesThatDontHaveSingularNameArray));
+	}
+	
+	/**
+	* @test
+	*/
+	public void function allcfcPropertiesAreCaseSensitive(){
+		var allSpelledProperly = true;
+		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
+		for(var entityName in allEntities) {
+			var properties = request.slatwallScope.getService("hibachiService").getPropertiesByEntityName(entityName);
+			for(var property in properties) {
+				if(
+					structkeyExists(property,'cfc') 
+				){
+					var longEntityName = 'Slatwall' & property.cfc;
+					if(!ArrayFind(allEntities,longEntityName)){
+						allSpelledProperly = false;
+						addToDebug( '#entityName#:#property.name# cfc attribute #property.cfc# needs to be case-sensitive' );
+					}
+				}
+			}
+		}
+		assert(allSpelledProperly);
+	}
 
 	//Entity Audit Properties Test
+	/**
+	* @test
+	*/
 	public void function all_entity_properties_have_audit_properties() {
 
 		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
@@ -56,10 +111,10 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		var entitiesThatDontHaveAuditPropertiesArray = [];
 
 		// Exception Entities with no properties
-		var entitiesWithNoAuditPropsRequired = "SlatwallCommentRelationship,SlatwallAudit,SlatwallUpdateScript";
+		var entitiesWithNoAuditPropsRequired = "SlatwallDatabaseCache,SlatwallCommentRelationship,SlatwallAudit,SlatwallUpdateScript,SlatwallServerInstance";
 
 		// Exception Entities that only require the createdByAccountID & createdDateTime
-		var entitiesWithCreatedOnlyProperties = "SlatwallComment,SlatwallEmail,SlatwallInventory,SlatwallPrint,SlatwallShippingMethodOption,SlatwallStockReceiverItem,SlatwallEmailBounce";
+		var entitiesWithCreatedOnlyProperties = "SlatwallComment,SlatwallEmail,SlatwallInventory,SlatwallPrint,SlatwallShippingMethodOption,SlatwallShippingMethodOptionSplitShipment,SlatwallStockReceiverItem,SlatwallEmailBounce";
 
 		// Exception Entities that only required createdDateTime & modifiedDateTime
 		var entitiesWithCreatedAndModifiedTimeOnlyProperties = "SlatwallSession";
@@ -108,6 +163,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 	}
 
 	//Misspell persistent Test
+	/**
+	* @test
+	*/
 	public void function all_entity_properties_didnt_mispell_persistent() {
 
 		var misspellCount = 0;
@@ -134,6 +192,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 	}
 
 	//Misspell persistent Test
+	/**
+	* @test
+	*/
 	public void function all_calculated_properties_are_setup_correctly() {
 
 		var calculatedErrors = 0;
@@ -181,6 +242,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 	}
 
 	// Oracle Naming tests
+	/**
+	* @test
+	*/
 	public void function oracle_entity_table_name_max_len_30() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -197,6 +261,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		assert(pass);
 	}
 
+	/**
+	* @test
+	*/
 	public void function oracle_entity_table_name_many_to_many_link_table_max_len_30() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -217,6 +284,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		assert(pass);
 	}
 
+	/**
+	* @test
+	*/
 	public void function oracle_entity_column_name_max_len_30() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -260,6 +330,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 	}
 
 	// Table Name Prefixes
+	/**
+	* @test
+	*/
 	public void function table_name_starts_with_sw() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -270,6 +343,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		}
 	}
 
+	/**
+	* @test
+	*/
 	public void function table_name_starts_with_sw_on_many_to_many_link_table() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -285,6 +361,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 	}
 
 	// Bi Directional Helpers
+	/**
+	* @test
+	*/
 	public void function extra_lazy_properties_have_no_bidirectional_helpers() {
 		var ormClassMetaData = ORMGetSessionFactory().getAllClassMetadata();
 		var ormEntityNames = listToarray(structKeyList(ormClassMetaData));
@@ -337,6 +416,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		assert(pass);
 	}
 
+	/**
+	* @test
+	*/
 	public void function all_smart_list_search_dont_have_errors() {
 		// Get all entities
 		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
@@ -367,6 +449,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		assert(!arrayLen(exceptionErrorEntities));
 	}
 
+	/**
+	* @test
+	*/
 	public void function all_smart_list_search_return_no_results_with_invalid_keywords() {
 		// Get all entities
 		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
@@ -392,6 +477,73 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		addToDebug( nonFilteredEntities );
 
 		assert(!arrayLen(nonFilteredEntities));
+	}
+	
+	//this function makes sure that many-to-many relationships are not using cascade delete. 
+	/**
+	* @test
+	*/
+	public void function check_delete_cascade_of_many_to_many_associations() {
+		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
+		
+		var criminalsMessage = "";
+
+		for(var entityName in allEntities) {
+			var properties = request.slatwallScope.getService("hibachiService").getPropertiesByEntityName(entityName);
+			for(var property in properties) {
+				
+				if (
+					structKeyExists(property, "fieldtype") 
+					&& property.fieldtype == "many-to-many" 
+					&& structKeyExists(property, "cascade") 
+					&& findNoCase('delete', property.cascade)
+					&& !structKeyExists(property,'allowcascade')
+				   ) {
+					criminalsMessage &= "entityName=#entityName# propertyName=#property.name#, <br>";
+				}	
+							
+			}			
+		}
+		
+		assert(
+			len(criminalsMessage) == 0,
+			criminalsMessage
+		);
+		
+	}
+	
+	//This function checks if a persistant property (not cfc) uses type instead of ormtype to define the datatype
+	/**
+	* @test
+	*/
+	public void function check_persistant_nonCFC_properties_that_use_type_instead_of_ormtype() {
+		var allEntities = listToArray(structKeyList(ORMGetSessionFactory().getAllClassMetadata()));
+		
+		var criminalsMessage = "";
+
+		for(var entityName in allEntities) {
+			var properties = request.slatwallScope.getService("hibachiService").getPropertiesByEntityName(entityName);
+			for(var property in properties) {
+				if (
+						(
+							!structKeyExists(property,'persistent')
+							 ||(
+							 	structKeyExists(property,'persistent') 
+							 	&& property.persistent
+							   )
+						)
+						&& !structKeyExists(property, "cfc") 
+						&& structKeyExists(property, "type") 
+						&& property.type != 'any'
+				   ) {
+					criminalsMessage &= "entityName=#entityName# propertyName=#property.name# #property.type#, <br>"&chr(10)&chr(13);
+				}
+			}			
+		}
+		assert(
+			len(criminalsMessage) == 0,
+			criminalsMessage
+		);
 	}
 
 }

@@ -2,14 +2,20 @@
 
 # Functions for increasing the version number
 function format3Digit( ) {
-  if [ ${#micro} = 1 ]
+  if [ ${#micro} = 0 ]
+    then
+      micro=000
+  elif [ ${#micro} = 1 ]
     then
       micro=00$micro
   elif [ ${#micro} = 2 ]
     then
       micro=0$micro
   fi
-  if [ ${#build} = 1 ]
+  if [ ${#build} = 0 ]
+    then
+      build=000
+  elif [ ${#build} = 1 ]
     then
       build=00$build
   elif [ ${#build} = 2 ]
@@ -71,6 +77,7 @@ elif [ $mergedFrom != "master" ] && [ $CIRCLE_BRANCH = "develop" ]; then
   # Write File
   echo $newVersion > version.txt.cfm
   echo "Updated $version -> $newVersion"
+
 fi
 
 # Find out if any files changed as part of this build
@@ -80,7 +87,7 @@ changedFiles=$(git diff --name-only)
 if [ "$changedFiles" = "" ]; then
     # no changes
     echo "No Changes To Push"
-else
+elif [ $CIRCLE_BRANCH = "master" ] || [ $CIRCLE_BRANCH = "develop" ]; then
     # changes
     echo "Build/Version Changes Found"
     git commit -a -m "CI build passed, auto-built files commit - $CIRCLE_BUILD_URL [ci skip]"
@@ -88,13 +95,44 @@ else
     # Push the code
     git push origin
 
+    # If this was a taged branch (master)
     if [ $tag = true ]; then
+      # Create a zip & hash of this release
+      git archive --format=zip HEAD > slatwall-latest.zip
+      cp slatwall-latest.zip slatwall-$newVersion.zip
+
+      md5sum slatwall-latest.zip > slatwall-latest.md5.txt
+      cp slatwall-latest.md5.txt slatwall-$newVersion.md5.txt
+
+      aws s3 cp slatwall-latest.zip s3://slatwall-releases/slatwall-latest.zip
+      aws s3 cp slatwall-$newVersion.zip s3://slatwall-releases/slatwall-$newVersion.zip
+      aws s3 cp slatwall-latest.md5.txt s3://slatwall-releases/slatwall-latest.md5.txt
+      aws s3 cp slatwall-$newVersion.md5.txt s3://slatwall-releases/slatwall-$newVersion.md5.txt
+
       # Tag this version
       git tag -a -m "Version $newVersion" $newVersion
 
       # Push Tag to github
       git push origin $newVersion
     fi
+
+    # If this is the develop branch then we can push up BE Release to S3
+    if [ $CIRCLE_BRANCH = "develop" ]; then
+      git archive --format=zip HEAD > slatwall-be.zip
+      md5sum slatwall-be.zip > slatwall-be.md5.txt
+      aws s3 cp slatwall-be.zip s3://slatwall-releases/slatwall-be.zip
+      aws s3 cp slatwall-be.md5.txt s3://slatwall-releases/slatwall-be.md5.txt
+    fi
+
+
+fi
+
+# If this is the develop branch then we can push up BE Release to S3
+if [ $CIRCLE_BRANCH = "hotfix" ]; then
+  git archive --format=zip HEAD > slatwall-hotfix.zip
+  md5sum slatwall-hotfix.zip > slatwall-hotfix.md5.txt
+  aws s3 cp slatwall-hotfix.zip s3://slatwall-releases/slatwall-hotfix.zip
+  aws s3 cp slatwall-hotfix.md5.txt s3://slatwall-releases/slatwall-hotfix.md5.txt
 fi
 
 # If this was a master branch change, we need to try and merge into develop, and then push develop
@@ -102,14 +140,14 @@ if [ $CIRCLE_BRANCH = "master" ]; then
   # checkout hotfix
   git checkout hotfix
   # merge master into hotfix
-  git merge master
+  git merge -m "Merge branch 'master' into 'hotfix'" master
   # push hotfix back up
   git push origin
 
   # checkout develop
   git checkout develop
   # merge master into develop
-  git merge master
+  git merge -m "Merge branch 'master' into 'develop'"  master
   # Read all the conflicts of the repository
   conflicts=$(git diff --name-only --diff-filter=U)
 

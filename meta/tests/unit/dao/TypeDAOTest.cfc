@@ -47,26 +47,47 @@ Notes:
 
 */
 component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
-
+	
 	public void function setUp() {
 		super.setup();
 		
 		variables.dao = request.slatwallScope.getDAO("typeDAO");
 	}
-
+	
+	/**
+	* @test
+	*/
 	public void function inst_ok() {
 		assert(isObject(variables.dao));
 	}
 	
-	// getSystemCodeTypeCount()
+	// getSystemCodeTypeCount()	
+	/**
+	* @test
+	*/
 	public void function getSystemCodeTypeCount_returns_numeric_value_of_one_for_top_level_type() {
 		
 		assertEquals(1, variables.dao.getSystemCodeTypeCount( systemCode="orderStatusType" ));
 	}
-	
+		
+	/**
+	* @test
+	*/
 	public void function getSystemCodeTypeCount_returns_numeric_value_of_zero_for_fake() {
 		
 		assertEquals(0, variables.dao.getSystemCodeTypeCount( systemCode="my-fake-system-code" ));
+	}
+	
+	/**
+	* @test
+	*/
+	public void function getTypeBySystemCodeTest() {
+		
+		var result = variables.dao.getTypeBySystemCode('otSalesOrder');
+		assertEquals('444df2df9f923d6c6fd0942a466e84cc', result.gettypeID());
+		assertEquals('444df2deab6476cb2c429946d6538436,444df2df9f923d6c6fd0942a466e84cc', result.getTypeIDPath());
+		assertEquals('Sales Order', result.getTypeName());
+		assertEquals('otSalesOrder', result.getSystemCode());
 	}
 	
 }

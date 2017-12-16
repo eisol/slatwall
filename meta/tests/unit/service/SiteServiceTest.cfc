@@ -47,14 +47,17 @@ Notes:
 
 */
 component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
-
+	
 	public void function setUp() {
 		super.setup();
 		
 		variables.service = request.slatwallScope.getBean("siteService");
 		variables.integrationService = request.slatwallScope.getBean("integrationService");
 	}
-	
+		
+	/**
+	* @test
+	*/
 	public void function deploy_SiteTest(){
 		
 		var integration = request.slatwallScope.getService('integrationService').getIntegrationByIntegrationPackage('slatwallcms');
@@ -62,7 +65,7 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		var appData = {
 			appID ='test',
 			appName='#createUuid()#',
-			appCode="#createUuid()#",
+			appCode="#right(createUuid(),10)#",
 			integration={
 				integrationID=integration.getIntegrationID()
 			}
@@ -72,7 +75,7 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		var siteData = {
 			siteid='',
 			siteName="#createUuid()#",
-			siteCode="#createUuid()#",
+			siteCode="#right(createUuid(),10)#",
 			domainNames="#createUUID()#",
 			app={
 				appID=app.getAppID()
@@ -83,6 +86,22 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		//here we should assert the default content was created as well as the directories
 		assertTrue(arraylen(site.getContents()));
 		//remove directories as the unit tests do not already do that. Delete outside of validation
+		var appDirectory = expandPath('/Slatwall') & '/custom/apps/#app.getAppCode()#';
+		var siteDirectory = appDirectory & '/#site.getSiteCode()#';
+		var appcfc = appDirectory & '/Application.cfc';
+		var configDirectory = siteDirectory & '/config';
+		var modelDirectory = siteDirectory & '/model';
+		var tagsDirectory = siteDirectory & '/tags';
+		var templatesDirectory = siteDirectory & '/templates';
+		//assert that the skeleton made its way to the directory
+		assert(directoryExists(appdirectory));
+		assert(directoryExists(siteDirectory));
+		assert(fileExists(appcfc));
+		assert(directoryExists(configDirectory));
+		assert(directoryExists(modelDirectory));
+		assert(directoryExists(tagsDirectory));
+		assert(directoryExists(templatesDirectory));
+		
 		directoryDelete(site.getApp().getAppPath(),true);
 		request.slatwallScope.getService("settingService").removeAllEntityRelatedSettings( entity=app );
 		request.slatwallScope.getService("settingService").removeAllEntityRelatedSettings( entity=site );
@@ -94,6 +113,9 @@ component extends="Slatwall.meta.tests.unit.SlatwallUnitTestBase" {
 		//site.removeApp(javacast('null',''));
 		// Call delete in the DAO
 		request.slatwallScope.getBean('HibachiDAO').delete(target=app);
+		
+		
+		
 	}
 }
 

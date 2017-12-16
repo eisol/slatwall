@@ -73,6 +73,9 @@ component displayname="Location" entityname="SlatwallLocation" table="SwLocation
 	// Remote Properties
 	property name="remoteID" ormtype="string";
 	
+	//Calculated Properties
+	property name="calculatedLocationPathName" ormtype="string";
+	
 	// Audit Properties
 	property name="createdDateTime" hb_populateEnabled="false" ormtype="timestamp";
 	property name="createdByAccountID" hb_populateEnabled="false" ormtype="string";
@@ -92,11 +95,18 @@ component displayname="Location" entityname="SlatwallLocation" table="SwLocation
 		return (arraylen(getchildLocations()) > 0);
 	}
 	
+	public numeric function getChildLocationCount(){
+		return getService('locationService').getChildLocationCount(this);
+	}
+	
 	public any function getPrimaryAddress() {
-		if(isNull(variables.primaryAddress)) {
-			return getService("locationService").newLocationAddress();
-		} else {
+		if(!isNull(variables.primaryAddress)) {
 			return variables.primaryAddress;
+		} else if (arrayLen(getLocationAddresses())) {
+			variables.primaryAddress = getLocationAddresses()[1];
+			return variables.primaryAddress;
+		} else {
+			return getService("locationService").newLocationAddress();
 		}
 	}
 	
@@ -110,12 +120,25 @@ component displayname="Location" entityname="SlatwallLocation" table="SwLocation
 	public any function getLocationPathName() {
 		if(!structKeyExists(variables, "locationPathName")) {
 			variables.locationPathName = "";
-			var	locationOptions = getService("locationService").getLocationOptions(this.getLocationID());
-			if(arrayLen(locationOptions)) {
-				variables.locationPathName = locationOptions[1].name;
+			
+			//Add each of the parents in the chain to the string.
+			var parentLocation = this.getParentLocation();
+			while (!isNull(parentLocation)){
+				variables.locationPathName = listAppend(variables.locationPathName, parentLocation.getLocationName(), "#chr(187)#");
+				if(isNull(parentLocation.getParentLocation())){
+					break;
+				}
+				parentLocation = parentLocation.getParentLocation();
 			}
+			//Add this location name to the end.
+			variables.locationPathName = listAppend(variables.locationPathName, this.getLocationName(), "#chr(187)#");
+			variables.locationPathName = rereplace(variables.locationPathName,'#chr(187)#',' #chr(187)# ','all');
 		}
 		return variables.locationPathName;
+	}
+	
+	public any function getLocationOptions(){
+		return getService("locationService").getLocationOptions(this.getLocationID());
 	}
 	
 	// ============  END:  Non-Persistent Property Methods =================
@@ -190,23 +213,26 @@ component displayname="Location" entityname="SlatwallLocation" table="SwLocation
 	}
 	
 	public string function getSimpleRepresentation() {
-		if(!isNull(getParentLocation())) {
-			return getParentLocation().getSimpleRepresentation() & " &raquo; " & getLocationName();
+		if(!isNull(getCalculatedLocationPathName())){
+			return getCalculatedLocationPathName();
+		}else{
+			return getLocationPathName();
 		}
-		return getLocationName();
 	}
+	
 	
 	// ==================  END:  Overridden Methods ========================
 		
 	// =================== START: ORM Event Hooks  =========================
-	
 	public void function preInsert(){
 		setLocationIDPath( buildIDPathList( "parentLocation" ) );
+		setCalculatedLocationPathName( getLocationPathName() );
 		super.preInsert();
 	}
 	
 	public void function preUpdate(struct oldData){
-		setLocationIDPath( buildIDPathList( "parentLocation" ) );;
+		setLocationIDPath( buildIDPathList( "parentLocation" ) );
+		setCalculatedLocationPathName( getLocationPathName() );
 		super.preUpdate(argumentcollection=arguments);
 	}
 	
